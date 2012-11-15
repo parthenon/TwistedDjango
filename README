@@ -1,0 +1,97 @@
+DjangoTwistedWebSockets
+=======================
+
+This project is built around python autobahn. 
+Autobahn is an implementation of the Websockets protocol using python twisted.
+This project enhances autobahn by integrating django.
+
+Usage
+=====
+
+The DjangoTwistedWebSockets server is build around commands.  All communication is done through 
+json, all a client need so do is send a json object with a key value pair.  Each key value pair
+is a command and an argument.  The server processes the command and sends back a response object,
+which is also a json encoded string.
+
+The session_id from django's sessionID cookie also need to be sent along if you want to take
+advantage of django's user authentication.
+
+Implementing Commands
+---------------------
+
+Implamenting a command is straight forward.  
+Write a functions that implements your command, and then register that command by adding a
+key value pair to the TWISTED_COMMAND dictionary in wssettings.  
+
+'command':function,
+
+First write a function that accepts the following arguments:
+
+msg:  This is the data that got sent along with the command key
+response:  This is a copy of the dictionary that will be sent back to the client.
+connection:  This is a freference to the protocol object that represents the connection to the 
+             client.  The connection contains the command's state, as well as several helper
+             functions.
+
+
+Functionality
+=============
+
+DjangoWSServerFactory
+---------------------
+
+This class extends autobahn's server factory by adding a 'global state' that is accessible
+from the protocol objects and command functions.
+
+There are also several helper methods:
+get_global_state:  Get a copy of the global state
+update_global_state:  Wraps dict.update.  I may or may not need to add locks to the global state.
+
+broadcast:  This will send a message to all of the users currently connected to the server.
+send_to_subset:  Send a message to a list of connected users.  Requires a list of protocol objects
+                 in addition to the message.
+
+DjangoWSServerProtocol
+----------------------
+
+This class extends autobahn's server protocol by adding state that is accessible from the 
+command functions.
+
+When a user sends the first message to the twisted server, the protocol object attempts to validate
+the session id from the django session id cookie.  If present, the session model instance is 
+requested and added to the protocol's instance variables.  The session instance is used to 
+retrieve the User model instance, which is also stored as an instance variable.
+
+
+The protocol object keeps state information for all commands that have been registered.
+
+The helper methods for this protocol are:
+
+get_connection_state:  The protocol object keeps track of which commands are currently processing.
+                       When get_connection_state is called it returns the state for that command
+                       only.
+
+update_connection_state:  Update the state for the currently running command.
+is_authenticated:  Return True is the user is authenticated else if the user object is
+                   absent or the user is un-authenticated it return False.
+
+To-Do
+====
+
+Deferreds EVERYWHERE.  I'm pretty sure that twisted isn't going to like blocking functions.
+And besides, the beauty of this system is that it's so fast, it would be a shame to ruin that 
+efficiency by repeated blocking calls to the database or spending a bunch of time processing
+signals.
+    The protocol instance is probably a good place to do this.
+    I could probably make a couple of helper functions.  One to send a signal given the signal 
+    instance and the list of arguments.  The other would do a database lookup given the lookup 
+    function and the list of arguments.  I would be a bamf if I could figure out a way of 
+    allowing chaining in a reasonable way.
+
+    It might be possible to actually override some of the django class definitions so that when
+    we're in the chat server the model's __metaclass__ creates the class object differently than
+    when we're in vanilla django.  Yeah, who ever pulls that one off would definitely be a bamf. 
+
+Rewrite the load_commands functionality to automatically look in a specific directory for commands.
+Possibly look in a specific directory per app.  More thought is needed on which makes more sense.
+
