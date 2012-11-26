@@ -1,8 +1,8 @@
-# connex/chat/chat_server.py
+# viualization/TwistedDjango/twisted_server.py
 
 #--------------- Set up the Django environment ---------------#
 from django.core.management import setup_environ
-from connex import settings
+from visualization import settings
 
 setup_environ(settings)
 from django.db.models.loading import get_apps
@@ -24,26 +24,24 @@ from twisted.python import log
 from twisted.web.server import Site
 from twisted.web.static import File
 from twisted.internet.error import CannotListenError
+from twisted.internet.task import LoopingCall
 
 from autobahn.websocket import (WebSocketServerFactory,
                                 WebSocketServerProtocol,
                                 listenWS)
 
-from connex.conference.config import conf_perms
-from connex.twisted_django_server.twisted_command_utilities import (ClientError, 
-                                                                    CommandResponse,
-                                                                    generic_deferred_errback,
-                                                                    who_called_me)
-from connex.twisted_django_server import wssettings
+from visualization.d3_suite.collection_api import RedisListener 
+from visualization.TwistedDjango.twisted_command_utilities import (ClientError, 
+                                                                   CommandResponse,
+                                                                   generic_deferred_errback,
+                                                                   who_called_me)
+from visualization.TwistedDjango import wssettings
 
 from termcolor import colored, cprint
-import sys, logging, json, copy, os, logging
+import sys, logging, json, copy, os, logging, redis, Queue
 from inspect import isfunction, ismethod
 
-logging.basicConfig(filename=os.path.join(settings.SITE_ROOT, 
-                                           '../logs/spectel_api.log'))
 AUTHENTICATION_FAILURE = 3000
-
 
 class AtExit(object):
 
@@ -62,7 +60,6 @@ class AtExit(object):
                 pass
         else:
             print 'You must provide a valid port number.'
-
 
 class DjangoWSServerProtocol(WebSocketServerProtocol):
     """
@@ -113,14 +110,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.default_command(msg, binary)
         if not message:
             return
-        if 'authenticate' in message:
-            self.logger.debug('authenticating')
-            auth = message.pop('authenticate')
-            self.logger.debug(auth)
-            d = deferToThread(self.confirm_session, session_id=auth)
-            d.addCallback(self.session_success)
-            d.addErrback(self.session_error)
-            return
+        #if 'authenticate' in message:
+        #    self.logger.debug('authenticating')
+        #    auth = message.pop('authenticate')
+        #    self.logger.debug(auth)
+        #    d = deferToThread(self.confirm_session, session_id=auth)
+        #    d.addCallback(self.session_success)
+        #    d.addErrback(self.session_error)
+        #    return
 
         self.process_message(message, binary)
 
@@ -189,14 +186,15 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.logger.debug('Entering confirm_session session_id:%s' % self.session_id)
         if not self.session or isinstance(self.session, modles.Model):
             try:
-                session = None
-                uid = None
                 session = Session.objects.get(pk=self.session_id)
+                uid = session.get_decoded().get('_auth_user_id')
+                user = User.objects.get(pk=uid)
+                self.session = session
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
 
         self.logger.debug('uid, session: %s, %s' % (str(uid), str(session)))
-        return session
+        return session, user
 
     def session_success(self, res):
         session = res
@@ -244,7 +242,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                           self.session_id,
                           self.session,
                           self.session_inst.expire_date)
-        
 
 class DjangoWSServerFactory(WebSocketServerFactory):
     """
@@ -256,6 +253,12 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         self.client_count = 0
         #This is the global state for all connections.
         self.conn_state = {}
+        self.update_queue = Queue.Queue()
+        self.redis_listener = RedisListener(self.update_queue)
+        self.redis_listener.start()
+        lc = LoopingCall(self.process_data, 0)
+        lc.start(0)
+
         for module in wssettings.COMMAND_MODULES:
             module.initialize(self)
         
@@ -278,6 +281,8 @@ class DjangoWSServerFactory(WebSocketServerFactory):
                     self.conn_state['conferences'][conf_id].remove(conn)
         
     def broadcast(self, msg):
+        if type(msg) == dict:
+            msg = JSON.dumps(msg)
         for c in self.clients:
             c.sendMessage(msg)
     
@@ -309,6 +314,14 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         for client, number in self.clients.items():
             if number == user_number:
                 return client
+
+    def process_data(self, *args, **kwargs):
+        try:
+            for key, data in self.update_queue.get(False):
+                self.broadcast({'redis_key':key,
+                                'data':data})
+        except Queue.Empty:
+            pass
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'debug':

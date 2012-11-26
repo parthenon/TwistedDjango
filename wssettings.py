@@ -1,6 +1,6 @@
 #--------------- Set up the Django environment ---------------#
 from django.core.management import setup_environ
-from connex import settings
+from visualization import settings
 
 setup_environ(settings)
 from django.db.models.loading import get_apps
@@ -11,10 +11,10 @@ import django.db.models
 from django.contrib.sessions.models import Session
 
 #--------------- Start of WebSocketServer settings ---------------#
-import example_module
-from example_module import example_function
+from visualization.d3_suite import twisted_collection
+from visualization.d3_suite.twisted_collection import (load_initial_data,)
 
-COMMAND_MODULES = (example_module,)
+COMMAND_MODULES = (twisted_collection,)
 
 
-TWISTED_COMMANDS = {'command_key':example_function, } 
+TWISTED_COMMANDS = {'load_initial_data':load_initial_data, } 
