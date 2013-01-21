@@ -1,4 +1,3 @@
-# viualization/TwistedDjango/twisted_server.py
 
 #--------------- Set up the Django environment ---------------#
 from django.core.management import setup_environ
@@ -17,49 +16,34 @@ from django.core.urlresolvers import reverse
 from django.contrib.sessions.models import Session
 from django.contrib.auth.models import User
 
-from twisted.internet import reactor
 from twisted.internet.threads import deferToThread
 from twisted.internet.defer import Deferred
 from twisted.python import log
-from twisted.web.server import Site
-from twisted.web.static import File
-from twisted.internet.error import CannotListenError
 from twisted.internet.task import LoopingCall
 
 from autobahn.websocket import (WebSocketServerFactory,
                                 WebSocketServerProtocol,
                                 listenWS)
-
-from visualization.d3_suite.collection_api import RedisListener 
 from visualization.TwistedDjango.twisted_command_utilities import (ClientError, 
                                                                    CommandResponse,
-                                                                   generic_deferred_errback,
-                                                                   who_called_me)
-from visualization.TwistedDjango import wssettings
-
+                                                                   DataSetNotAvailableError,)
+from visualization.TwistedDjango.twisted_command_utilities import (who_called_me,
+                                                                   who_am_i,
+                                                                   generic_deferred_errback,)
 from termcolor import colored, cprint
-import sys, logging, json, copy, os, logging, redis, Queue
+import sys, logging, json, copy, os, logging, redis, Queue, re, time, threading
 from inspect import isfunction, ismethod
+from visualization.TwistedDjango.collection_api import RedisListener
 
-AUTHENTICATION_FAILURE = 3000
+PRINT_MESSAGES = False
+DEBUG = True
 
-class AtExit(object):
+logging.basicConfig()
 
-    def __init__(self):
-        self.pdi = os.getpid()
-        self.pid_lock_stub = 'django_twisted_server/management/server%s.pid' 
+def printerror(msg):
+    errormsg = '{}: {}'.format(who_called_me(), msg)
+    cprint(errormsg, 'red')
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exception_type, exception_value, traceback):
-        if len(sys.argv) > 1:
-            try:
-                os.remove(os.path.join(settings.SITE_ROOT, self.pid_lock_stub % int(sys.argv[1])))
-            except OSError as e:
-                pass
-        else:
-            print 'You must provide a valid port number.'
 
 class DjangoWSServerProtocol(WebSocketServerProtocol):
     """
@@ -69,6 +53,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         authenticating the user.
     """
     def onOpen(self):
+        cprint('Initializing Protocol...', 'green')
         self.factory.register(self)
         self.default_command = None
         self.commands = self.factory.commands
@@ -98,6 +83,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 This is assumed to be json.  If it's not a default function will be run.
         """
         message = None
+        cprint(msg, 'green')
         self.logger.debug(msg)
         
         try:
@@ -125,6 +111,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         WebSocketServerProtocol.connectionLost(self, reason)
         self.factory.unregister(self)
 
+    def process_event(self, msg, binary, *args, **kwargs):
+        pass
+
     def process_message(self, msg, binary, *args, **kwargs):
         """
             All functions will be sent the value associated with their keyword, the binary, 
@@ -137,24 +126,29 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         recipients = [self]
         unimplemented = []
         self.logger.debug(msg)
-        for key, val in msg.items():
-            func = self.commands.get(key, None)
-            if func:
-                self.current_key = key
-                try:
-                    cprint('processing django command: {0}'.format(json.dumps(msg, 
-                                                                              indent=4,
-                                                                              sort_keys=True)), 
-                           'blue')
-                    r = func(val, self, binary=binary)
-                    if r:
-                        r.distribute(self.current_key, self)
-                except ClientError as e:
-                    self.logger.error(e)
-                    errors.update({key:e.message})
-                self.current_key = ''
+        for command, val in msg.items():
+            function_list = self.commands.get(command, None)
+            if function_list:
+                self.current_command = command
+                for func in function_list:
+                    try:
+                        if PRINT_MESSAGES is True:
+                            cprint('processing django command: {0}'.format(
+                                    json.dumps(msg, 
+                                    indent=4,
+                                    sort_keys=True)), 
+                                'blue')
+                        r = func(val, self, binary=binary)
+                        if r:
+                            r.distribute(self.current_command, self)
+                    except ClientError as e:
+                        self.logger.error(e)
+                        errors.update({command:e.message})
+                    self.current_command = ''
+                    if function_list[func] is True:
+                        function_list.remove(func)
             else:
-                unimplemented.append(key)
+                unimplemented.append(command)
                 if 'unimplemented' in errors:
                     raise KeyNotAllowedError("Do not add the key 'unimplemented' to the response dict.  It is reserved by the command protocol.")
         if len(unimplemented) > 0:
@@ -243,33 +237,51 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                           self.session,
                           self.session_inst.expire_date)
 
+
 class DjangoWSServerFactory(WebSocketServerFactory):
     """
     """
+    command_modules_init = []
+    commands = {}
+
     def __init__(self, url, debug = False, debugCodePaths = False):
+        cprint('Modules: {}'.format(self.command_modules_init), 'yellow')
+        cprint('Commands: {}'.format(self.commands), 'yellow')
+        cprint('Initializing Protocol...', 'green')
+
         WebSocketServerFactory.__init__(self, url, debug = debug, debugCodePaths = debugCodePaths)
+
         #Protocol instances are the keys, django users are the values.
         self.clients = {}
         self.client_count = 0
+
         #This is the global state for all connections.
         self.conn_state = {}
+
         self.update_queue = Queue.Queue()
-        self.redis_listener = RedisListener(self.update_queue)
+
+        self.redis_listener = RedisListener(self)
+
+        #key: [connection1, ... ]  keys can be regular expressions
+        self.conn_subscriptions = {i:[] for i in 
+            self.redis_listener.get_active_keys()}
+
         self.redis_listener.start()
-        lc = LoopingCall(self.process_data, 0)
+
+        lc = LoopingCall(self.process_data)
         lc.start(0)
 
-        for module in wssettings.COMMAND_MODULES:
-            module.initialize(self)
+        for module in self.command_modules_init: 
+            module(self)
         
     def register(self, client):
         self.client_count += 1
         self.clients.update({client:self.client_count})
         self.conn_state.update({client:{}})
-        print 'Client number:{0}:{1} '.format(self.client_count, who_called_me())
         client.user_number = self.client_count
 
     def unregister(self, client):
+        return
         if client in self.clients:
             del self.clients[client]
         if client in self.conn_state:
@@ -288,21 +300,11 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     
     def send_to_subset(self, clients, msg):
         msg = json.dumps(json.loads(msg), indent=4, sort_keys=True)
-        cprint('Sending to browser: {0}'.format(msg), 'yellow')
+        if DEBUG == True:
+            cprint('Sending to browser: {0}'.format(msg), 'yellow')
         for client in clients:
             if client in self.clients:
                 client.sendMessage(msg)
-
-    def load_commands(self, comm):
-        """
-            Import commands from a dict.
-            {<type 'str'>:<type 'function'>, ...}
-            Will raise a VauleError if the types are incorrect.
-        """
-        for key, value in comm.items():
-            if not isinstance(key, str) or not isfunction(value):
-                raise ValueError(u'All server commands must be string:function pairs.')
-            self.commands = comm
 
     def get_global_state(self):
         return self.conn_state
@@ -310,48 +312,76 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     def update_global_state(self, state):
         self.conn_state.update(state)
 
-    def get_user_by_number(self, user_number):
-        for client, number in self.clients.items():
-            if number == user_number:
-                return client
-
     def process_data(self, *args, **kwargs):
-        try:
-            for key, data in self.update_queue.get(False):
-                self.broadcast({'redis_key':key,
-                                'data':data})
-        except Queue.Empty:
-            pass
+        if self.update_queue.empty():
+            return
+        while not self.update_queue.empty():
+            message = self.update_queue.get(False)
+            try:
+                if message['type'] != 'message':
+                   continue 
+            except TypeError, KeyError:
+                continue
+            for conn in self.conn_subscriptions[message['channel']]:
+                msg = json.dumps({
+                    'new_data_point': {
+                        'key':message['channel'], 
+                        'data':message['data']['data'],
+                        'time':message['data']['time'],
+                    },
+                })
+                #cprint('sending {} to {} '.format(msg, str(conn)))
+                conn.sendMessage(msg)
 
-def main():
-    if len(sys.argv) > 1 and sys.argv[1] == 'debug':
-        log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
-        debug = True
-    else:
-        debug = False
-    
-    if len(sys.argv) > 1:
-        factory = DjangoWSServerFactory("ws://localhost:" + '31415', 
-                                         debug=debug, 
-                                         debugCodePaths=debug)
+    def subscribe(self, connection, regex):
+        """
+            Key is a string
+        """
+        temp = regex
+        print 'RegEx: ' + regex
+        if type(regex) == str or type(regex) == unicode:
+            regex = re.compile(regex)
+        for key, conn_list in self.conn_subscriptions.items():
+            if regex.match(key) is not None:
+                print 'Match: ' + str(regex.match(key))
+                conn_list.append(connection)
+                print 'RegEx: ' + str(self.conn_subscriptions)
+                return True
+        if DEBUG:
+            printerror('No key matching your regex was found.')
+            printerror(self.conn_subscriptions)
 
-        factory.load_commands(wssettings.TWISTED_COMMANDS)
-        factory.protocol = DjangoWSServerProtocol
-        factory.setProtocolOptions(allowHixie76 = True)
-        listenWS(factory)
+        raise DataSetNotAvailableError('The key {} is not active.'.format(regex))
 
-        webdir = File(".")
-        web = Site(webdir)
-        try:
-            reactor.listenTCP(int(sys.argv[1]), web)
-        except CannotListenError as error:
-            print 'There was a problem opening the specified port number.'
-            print error
-            sys.exit()
-            
-        reactor.run()
+    def unsubscribe(self, connection, regex):
+        """
+            Key is a string
+        """
+        if type(regex) == str:
+            regex = re.compile(str)
+        for key, conn_list in self.conn_subscriptions.items():
+            if regex.match(key):
+                try:
+                    conn_list.remove(connection)
+                except ValueError as e:
+                    raise KeyError('This connection is not subscribed to this data feed.')
+                    if DEBUG:
+                        printerror('You are not subscribed to that feed.') 
 
-if __name__ == '__main__':
-    with AtExit():    
-        main()
+    @classmethod
+    def register_command(cls, key, func, run_once=False):
+        if key in cls.commands:
+            cls.commands[key].update({func: run_once})
+            if not isinstance(key, str) or not isfunction(value):
+                raise ValueError(u'All server commands must be string:function pairs.')
+        else: 
+            cls.commands[key] = {func: run_once}
+
+    @classmethod
+    def remove_command(cls, key, func, run_once=False): 
+        del cls.commands[key][func]
+
+    @classmethod
+    def register_command_module(cls, init_func):
+        cls.command_modules_init.append(init_func)
 

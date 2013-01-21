@@ -11,10 +11,7 @@ import django.db.models
 from django.contrib.sessions.models import Session
 
 #--------------- Start of WebSocketServer settings ---------------#
-from visualization.d3_suite import twisted_collection
-from visualization.d3_suite.twisted_collection import (load_initial_data,)
+#---------------    Import all command functions   ---------------#
 
-COMMAND_MODULES = (twisted_collection,)
+from visualization.visualization.twisted_collection import * 
 
-
-TWISTED_COMMANDS = {'load_initial_data':load_initial_data, } 

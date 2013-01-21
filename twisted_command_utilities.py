@@ -2,6 +2,7 @@ import json
 from termcolor import colored, cprint
 from inspect import stack
 
+
 def who_called_me():
     """
         Return the name of the parent of the function that doesn't know where it came from.
@@ -23,6 +24,7 @@ def generic_deferred_errback(error, *args, **kwargs):
     print(e+m)
 
 class CommandResponse:
+
     def __init__(self, 
                  deferred=None, 
                  response={}, 
@@ -34,7 +36,7 @@ class CommandResponse:
         self.deferred = deferred
         self.deferred_response = deferred_response
 
-    def distribute(self, command_name, connection):
+    def distribute(self, command_name, connection, everyone_else=False):
         """
             Default recipient is the calling protocol.
             If the recipients list is not empty, send to all recipients.
@@ -55,8 +57,14 @@ class CommandResponse:
             if self.deferred_response:
                 self.connection.sendMessage(json.dumps(def_resp(def_resp_args)))
         else:
-            self.connection.factory.send_to_subset(self.recipients, 
-                                                   json.dumps({self.command_name:self.response}))
+            if self.everyone_else is True:
+                self.connection.factory.send_to_subset(self.recipients, 
+                    json.dumps({self.command_name:self.response}), 
+                    everyone_but=self.connection)
+            else:
+                self.connection.factory.send_to_subset(self.recipients, 
+                    json.dumps({self.command_name:self.response}))
+
             if self.deferred_response:
                 self.connection.factory.send_to_subset(self.recipients, 
                                                        json.dumps(def_resp(def_resp_args)))
@@ -67,11 +75,27 @@ class CommandResponse:
     def add_cleanup_func(self, func):
         self.cleanup_func.append(func)
 
+
 class KeyNotAllowedError(KeyError):
     def __init__(self, value):
         self.value = value
     def __str__(self):
         return repr(self.value)
 
+
 class ClientError(Exception):
     pass
+
+
+class MissingKeyError(KeyError):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return repr(self.value)
+
+
+class DataSetNotAvailableError(ClientError):
+    def __init__(self, value):
+        self.value = value
+    def __unicode__(self):
+        return repr(self.value)
