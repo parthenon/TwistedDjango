@@ -2,7 +2,7 @@
 
 #--------------- Set up the Django environment ---------------#
 from django.core.management import setup_environ
-from visualization import settings
+from django.conf import settings
 
 setup_environ(settings)
 from django.db.models.loading import get_apps
@@ -15,7 +15,7 @@ from django.contrib.sessions.models import Session
 from termcolor import colored, cprint
 import sys, logging, json, copy, os, logging, redis, Queue, re, time
 from inspect import isfunction, ismethod
-from visualization.TwistedDjango.twisted_server import (DjangoWSServerProtocol, 
+from TwistedDjango.twisted_server import (DjangoWSServerProtocol,
                                                         DjangoWSServerFactory,)
 from autobahn.websocket import listenWS
 from twisted.web.static import File
@@ -34,7 +34,7 @@ class AtExit(object):
 
     def __init__(self):
         self.pdi = os.getpid()
-        self.pid_lock_stub = 'django_twisted_server/management/server%s.pid' 
+        self.pid_lock_stub = 'django_twisted_server/management/server%s.pid'
 
     def __enter__(self):
         return self
@@ -55,10 +55,10 @@ def main():
     else:
         debug = False
     debug = True
-    
+
     if len(sys.argv) > 1:
-        factory = DjangoWSServerFactory("ws://localhost:" + '31415', 
-                                         debug=debug, 
+        factory = DjangoWSServerFactory("ws://localhost:" + '31415',
+                                         debug=debug,
                                          debugCodePaths=debug)
         cprint('Created factory: {}'.format(factory), 'green')
 
@@ -80,10 +80,10 @@ def main():
 
         cprint('Starting Reactor', 'green')
         reactor.run()
-        
+
 
 if __name__ == '__main__':
-    #with AtExit():    
+    #with AtExit():
     main()
 
 

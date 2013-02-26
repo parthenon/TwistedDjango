@@ -1,6 +1,6 @@
 #--------------- Set up the Django environment ---------------#
 from django.core.management import setup_environ
-from visualization import settings
+import settings
 
 setup_environ(settings)
 from django.db.models.loading import get_apps
@@ -13,5 +13,6 @@ from django.contrib.sessions.models import Session
 #--------------- Start of WebSocketServer settings ---------------#
 #---------------    Import all command functions   ---------------#
 
-from visualization.visualization.twisted_collection import * 
+from TwistedDjango.collection_api import *
 
+TWISTED_COMMANDS = {}

@@ -3,51 +3,55 @@
 from django.conf import settings
 
 from subprocess import Popen
-import os, psutil, sys, time, atexit
+import os
+import sys
+import psutil
+import time
 
 
 #This is here to clean up code and shorten line lengths
 try:
-    DEFAULT_TWISTED_PORT = settings.DEFAULT_twisted_PORT
+    DEFAULT_TWISTED_PORT = settings.DEFAULT_TWISTED_PORT
 except AttributeError:
     DEFAULT_TWISTED_PORT = '8080'
 
 SITE_ROOT = settings.SITE_ROOT
 
-pid_lock_stub = 'twisted_django_server/management/server%s.pid' 
-script_name = 'connex/twisted_django_server/twisted_server.py'
-
-
-
+pid_lock_stub = '/tmp/server%s.pid'
+script_name = os.path.join(SITE_ROOT,
+                           'TwistedDjango/twisted_server.py')
 
 
 def start_twisted_server(args, **kwargs):
     #Start up an instance of a twisted server on a unique port
     signature = 'runtwistedserver port_number'
     if len(args) != 1:
-        if server_already_running(DEFAULT_twisted_PORT):
+        if server_already_running(DEFAULT_TWISTED_PORT):
             print 'A twisted server is already running on that port.'
-            return 
+            return
         else:
             twisted_env = os.environ
-            twisted_env["PYTHONPATH"] = settings.PROJECT_ROOT + ':' + twisted_env["PATH"]
+            twisted_env["PYTHONPATH"] = settings.SITE_ROOT + ':' + twisted_env["PATH"]
+            sys.path.insert(0, os.path.join(os.path.join(settings.SITE_ROOT, '../'), "freelancecoach/"))
 
-            server = Popen(['python', script_name, DEFAULT_twisted_PORT], env=twisted_env)
-        with open(os.path.join( SITE_ROOT, pid_lock_stub % DEFAULT_twisted_PORT),'w') as f:
+            server = Popen(['python', script_name, DEFAULT_TWISTED_PORT], env=twisted_env)
+        with open(os.path.join(pid_lock_stub % DEFAULT_TWISTED_PORT), 'w') as f:
             f.write(str(server.pid) + '\n')
-        print 'twisted server opened on default port number (%s).' % DEFAULT_twisted_PORT
+        print 'twisted server opened on default port number (%s).' % DEFAULT_TWISTED_PORT
     elif len(args) == 1:
         if server_already_running(args[0]):
             print 'A twisted server is already running on that port.'
-            return 
+            return
         else:
             try:
-                server = Popen(['python', script_name, str(args[0])])
+                twisted_env = os.environ
+                twisted_env["PYTHONPATH"] = settings.SITE_ROOT + ':' + twisted_env["PATH"]
+                sys.path.insert(0, os.path.join(os.path.join(settings.SITE_ROOT, '../'), "freelancecoach/"))
+
+                server = Popen(['python', script_name, str(args[0])], env=twisted_env)
             except TypeError as e:
                 print (e, script_name, args[0])
-        with open(os.path.join(
-                    SITE_ROOT, 
-                    pid_lock_stub % args[0]),'w') as f:
+        with open(os.path.join(pid_lock_stub % args[0]), 'w') as f:
             f.write(str(server.pid) + '\n')
         print 'twisted server opened on port number %s.' % args[0]
     else:
@@ -55,8 +59,9 @@ def start_twisted_server(args, **kwargs):
                % signature)
         return
 
+
 def kill_twisted_server(args, **kwargs):
-    """ 
+    """
     Open the lock file, get the pid and terminate the coresponding process
 
     """
@@ -71,7 +76,7 @@ def kill_twisted_server(args, **kwargs):
         return False
 
     try:
-        with open(os.path.join(SITE_ROOT, pid_lock_stub % port),'r') as f:
+        with open(os.path.join(SITE_ROOT, pid_lock_stub % port), 'r') as f:
             try:
                 pid = int(f.read())
             except ValueError:
@@ -93,17 +98,18 @@ def kill_twisted_server(args, **kwargs):
                 return True
             else:
                 return False
-            
+
     except IOError:
         print 'I do not have a record of a twisted server registered on that port.'
         return False
 
     print 'The twisted server running on port %s has been terminated.' % port
     return True
-    
+
+
 def server_already_running(port):
     try:
-        with open(os.path.join(SITE_ROOT, pid_lock_stub % port),'r') as f:
+        with open(os.path.join(SITE_ROOT, pid_lock_stub % port), 'r') as f:
             try:
                 pid = int(f.read())
             except ValueError:
@@ -115,7 +121,3 @@ def server_already_running(port):
                 return False
     except IOError:
         return False
-
-        
-        
-

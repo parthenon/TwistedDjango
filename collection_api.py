@@ -1,9 +1,12 @@
 #{'pattern': None, 'type': 'subscribe', 'channel': 'foo', 'data': 1L}
+import threading
+import redis
+import json
 
-from termcolor import cprint, colored
-import threading, time, redis, json, sys, config
+from termcolor import cprint
 
 DEBUG = False
+
 
 class RedisListener(threading.Thread):
 
@@ -11,11 +14,11 @@ class RedisListener(threading.Thread):
         super(RedisListener, self).__init__()
         self.daemon = True
         self.factory = factory
-        self.redis_server = redis.StrictRedis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=0)
+        self.redis_server = redis.StrictRedis(host='127.0.0.1', port=6379, db=0)
         self.redis_pubsub = self.redis_server.pubsub()
         self.all_keys = self.redis_server.keys('*')
-        self.active_keys = self.redis_server.lrange('data_keys',0,-1)
-         
+        self.active_keys = self.redis_server.lrange('data_keys', 0, -1)
+
         for key in self.active_keys:
             if DEBUG is True:
                 cprint(key, 'blue')
@@ -23,12 +26,12 @@ class RedisListener(threading.Thread):
 
     def get_all_keys(self, regex=None):
         return self.all_keys[:]
-        
+
     def get_active_keys(self, regex=None):
         return self.active_keys[:]
 
-    def update_active_keys(self): 
-        new_key_set = self.redis_server.lrange('data_keys',0,-1)
+    def update_active_keys(self):
+        new_key_set = self.redis_server.lrange('data_keys', 0, -1)
         new_keys = []
         stale_keys = []
 
@@ -54,7 +57,7 @@ class RedisListener(threading.Thread):
             try:
                 message['data'] = json.loads(message.get('data'))
             except TypeError:
-                msg = message.get('data')
+                message['data'] = message.get('data')
             self.factory.update_queue.put(message)
             self.update_active_keys()
 
