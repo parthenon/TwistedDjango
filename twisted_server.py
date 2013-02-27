@@ -1,9 +1,13 @@
+import json
+import logging
+import os
+import Queue
+import re
+import sys
 
 #--------------- Set up the Django environment ---------------#
-from django.core.management import setup_environ
-import settings
+from django.conf import settings
 
-setup_environ(settings)
 from django.db.models.loading import get_apps
 
 get_apps()
@@ -22,20 +26,14 @@ from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
                                 WebSocketServerProtocol,
                                 listenWS)
-from TwistedDjango.twisted_command_utilities import (ClientError,
-                                                     DataSetNotAvailableError,
-                                                     who_called_me,
-                                                     generic_deferred_errback,)
-from TwistedDjango import wssettings
 from termcolor import colored, cprint
-import logging
-import json
-import Queue
-import re
-import sys
-import os
 from inspect import isfunction
-from TwistedDjango.collection_api import RedisListener
+
+from twisted_command_utilities import (ClientError,
+                                       DataSetNotAvailableError,
+                                       who_called_me,
+                                       generic_deferred_errback,)
+import wssettings
 
 PRINT_MESSAGES = False
 DEBUG = True
@@ -218,12 +216,12 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             admin_access = True
         else:
             self.update_session('permissions', self.conf_perms[len(self.conf_perms) - 1])
-        if self.session.get('logged_in', False) is True or admin_access is True:
-            auth_response = {'authenticate': {'authenticate': 'success'}}
-        else:
-            auth_response = {'authenticate': {'authenticate': 'failure',
-                                              'loginUrl': reverse('conference_login')}}
-        self.sendMessage(json.dumps(auth_response))
+        #if self.session.get('logged_in', False) is True or admin_access is True:
+        #    auth_response = {'authenticate': {'authenticate': 'success'}}
+        #else:
+        #    auth_response = {'authenticate': {'authenticate': 'failure',
+        #                                      'loginUrl': reverse('conference_login')}}
+        #self.sendMessage(json.dumps(auth_response))
 
     def session_error(self, err):
         h = colored('Session Confirmation Errback: '
@@ -232,15 +230,16 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         e = colored(err, 'red', attrs=['bold'])
         print (e + h)
 
-        auth_response = {'authenticate': {'authenticate': 'failure',
-                                          'loginUrl': reverse('conference_login')}}
-        self.sendMessage(json.dumps(auth_response))
+        #auth_response = {'authenticate': {'authenticate': 'failure',
+        #                                  'loginUrl': reverse('conference_login')}}
+        #self.sendMessage(json.dumps(auth_response))
 
-        self.logger.debug('Session error: %s' % str(err))
-        self.sendClose(code=AUTHENTICATION_FAILURE, reason=u'Invalid session id.')
+        #self.logger.debug('Session error: %s' % str(err))
+        #self.sendClose(code=AUTHENTICATION_FAILURE, reason=u'Invalid session id.')
         self.factory.unregister(self)
 
     def update_session(self, key, value):
+        return True
         self.session[key] = value
         d = deferToThread(Session.objects.save,
                           self.session_id,
@@ -277,13 +276,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         self.conn_state = {}
 
         self.update_queue = Queue.Queue()
-
-        self.redis_listener = RedisListener(self)
-
-        #key: [connection1, ... ]  keys can be regular expressions
-        self.conn_subscriptions = {i: [] for i in self.redis_listener.get_active_keys()}
-
-        self.redis_listener.start()
 
         lc = LoopingCall(self.process_data)
         lc.start(0)
@@ -327,9 +319,14 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         """
         Import commands form a dict.
         {<type 'str'>:<type 'function'>, ...}
-        Weill raise a ValueError if the types are incorrect.
+        Will raise a ValueError if the types are incorrect.
         """
         for key, value in comm.items():
+            if not isfunction(value):
+                module = ".".join(value.split(".")[:-1])
+                func = value.split(".")[-1]
+                _temp = __import__(module, globals(), locals(), [func, ], -1)
+                value = getattr(_temp, func)
             if not isinstance(key, str) or not isfunction(value):
                 raise ValueError(u'All server commands must be string:function pairs.')
             self.commands = comm

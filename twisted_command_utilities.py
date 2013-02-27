@@ -1,5 +1,6 @@
 import json
-from termcolor import colored, cprint
+
+from termcolor import colored
 from inspect import stack
 
 
@@ -9,11 +10,13 @@ def who_called_me():
     """
     return stack()[2][3]
 
+
 def who_am_i():
     """
         Return the name of the function that doesn't know who it is.
     """
     return stack()[1][3]
+
 
 def generic_deferred_errback(error, *args, **kwargs):
     if not kwargs['message'].endswith('\n'):
@@ -21,16 +24,16 @@ def generic_deferred_errback(error, *args, **kwargs):
 
     m = colored(kwargs['message'], 'red', attrs=['bold'])
     e = colored(error, 'red')
-    print(e+m)
+    print(e + m)
+
 
 class CommandResponse:
-
-    def __init__(self, 
-                 deferred=None, 
-                 response={}, 
-                 recipients=[], 
+    def __init__(self,
+                 deferred=None,
+                 response={},
+                 recipients=[],
                  deferred_response=None):
-        self.response = response 
+        self.response = response
         self.recipients = recipients
         self.cleanup_funcs = []
         self.deferred = deferred
@@ -53,20 +56,22 @@ class CommandResponse:
             def_resp = self.deferred_response[0]
             def_resp_args = self.deferred_response[1]
         if len(self.recipients) == 0:
-            self.connection.sendMessage(json.dumps({self.command_name:self.response}))
+            self.connection.sendMessage(json.dumps({self.command_name: self.response}))
             if self.deferred_response:
                 self.connection.sendMessage(json.dumps(def_resp(def_resp_args)))
         else:
             if self.everyone_else is True:
-                self.connection.factory.send_to_subset(self.recipients, 
-                    json.dumps({self.command_name:self.response}), 
+                self.connection.factory.send_to_subset(
+                    self.recipients,
+                    json.dumps({self.command_name: self.response}),
                     everyone_but=self.connection)
             else:
-                self.connection.factory.send_to_subset(self.recipients, 
-                    json.dumps({self.command_name:self.response}))
+                self.connection.factory.send_to_subset(
+                    self.recipients,
+                    json.dumps({self.command_name: self.response}))
 
             if self.deferred_response:
-                self.connection.factory.send_to_subset(self.recipients, 
+                self.connection.factory.send_to_subset(self.recipients,
                                                        json.dumps(def_resp(def_resp_args)))
 
         #remove reference to deferred just in case that would interfere with garbage collection
@@ -79,6 +84,7 @@ class CommandResponse:
 class KeyNotAllowedError(KeyError):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
 
@@ -90,6 +96,7 @@ class ClientError(Exception):
 class MissingKeyError(KeyError):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
 
@@ -97,5 +104,6 @@ class MissingKeyError(KeyError):
 class DataSetNotAvailableError(ClientError):
     def __init__(self, value):
         self.value = value
+
     def __unicode__(self):
         return repr(self.value)

@@ -44,8 +44,8 @@ $( function() {
             }
             sock = null;
             $('#connex_global_error').text('The connection has been closed').show();
-            loadParticipants(undefined);
-            updateTable(undefined);
+            //loadParticipants(undefined);
+            //updateTable(undefined);
             
         }
         sock.onmessage = function(e) {
