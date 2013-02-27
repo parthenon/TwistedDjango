@@ -1,4 +1,5 @@
 import sys
+import os
 from optparse import OptionParser
 
 
@@ -13,8 +14,11 @@ def get_options():
     parser.add_option("-d", "--debug", action="store_true", dest="debug", default=False)
     (options, args) = parser.parse_args()
 
-    if not options.project:
-        print "Error: no project name specified"
-        sys.exit(1)
+    if 'TWISTED_DJANGO_OPTIONS' in os.environ:
+        options = os.environ['TWISTED_DJANGO_OPTIONS']
+    else:
+        if not options.project:
+            print "Error: no project name specified"
+            sys.exit(1)
 
     return (options, args)
