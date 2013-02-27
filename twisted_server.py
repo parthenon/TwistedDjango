@@ -1,69 +1,43 @@
 import json
 import logging
 import os
-import Queue
-import re
 import sys
 
 #--------------- Set up the Django environment ---------------#
-from django.conf import settings
+ROOT = os.path.dirname(os.path.dirname(__file__))
+sys.path.insert(0, ROOT)
+os.environ['PYTHONPATH'] = ROOT
+os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
+import settings
 
-from django.db.models.loading import get_apps
-
-get_apps()
 from django.contrib.sessions.models import Session
-
-#--------------- twisted server imports---------------#
-from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
+from django.core.urlresolvers import reverse
 from django.db import models
 
-from twisted.internet import reactor
+#--------------- twisted server imports---------------#
 from twisted.internet.threads import deferToThread
-from twisted.internet.task import LoopingCall
-from twisted.python import log
-
 from autobahn.websocket import (WebSocketServerFactory,
-                                WebSocketServerProtocol,
-                                listenWS)
+                                WebSocketServerProtocol)
 from termcolor import colored, cprint
 from inspect import isfunction
 
 from twisted_command_utilities import (ClientError,
-                                       DataSetNotAvailableError,
                                        who_called_me,
                                        generic_deferred_errback,)
-import wssettings
+from wssettings import TWISTED_COMMANDS
 
 PRINT_MESSAGES = False
 DEBUG = True
 
 logging.basicConfig()
 
-AUTHENTICATION_FAILURE = 30000
+AUTHENTICATION_FAILURE = None
 
 
 def printerror(msg):
     errormsg = '{}: {}'.format(who_called_me(), msg)
     cprint(errormsg, 'red')
-
-
-class AtExit(object):
-    def __init__(self):
-        self.pid = os.getpid()
-        self.pid_lock_stub = '/tmp/server%s.pid'
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exception_type, exception_value, traceback):
-        if len(sys.argv) > 1:
-            try:
-                os.remove(os.path.join(self.pid_lock_stub % int(sys.argv[1])))
-            except OSError:
-                pass
-        else:
-            print 'You must provide a valid port number.'
 
 
 class DjangoWSServerProtocol(WebSocketServerProtocol):
@@ -117,14 +91,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.default_command(msg, binary)
         if not message:
             return
-        #if 'authenticate' in message:
-        #    self.logger.debug('authenticating')
-        #    auth = message.pop('authenticate')
-        #    self.logger.debug(auth)
-        #    d = deferToThread(self.confirm_session, session_id=auth)
-        #    d.addCallback(self.session_success)
-        #    d.addErrback(self.session_error)
-        #    return
+        if 'authenticate' in message:
+            self.logger.debug('authenticating')
+            auth = message.pop('authenticate')
+            self.logger.debug(auth)
+            d = deferToThread(self.confirm_session, session_id=auth)
+            d.addCallback(self.session_success)
+            d.addErrback(self.session_error)
+            return
 
         self.process_message(message, binary)
 
@@ -147,22 +121,19 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         unimplemented = []
         self.logger.debug(msg)
         for command, val in msg.items():
-            function_list = self.commands.get(command, None)
-            if function_list:
+            function = self.commands.get(command, None)
+            if function:
                 self.current_command = command
-                for func in function_list:
-                    try:
-                        if PRINT_MESSAGES is True:
-                            cprint('processing django command: {0}'.format(json.dumps(msg, indent=4, sort_keys=True)), 'blue')
-                        r = func(val, self, binary=binary)
-                        if r:
-                            r.distribute(self.current_command, self)
-                    except ClientError as e:
-                        self.logger.error(e)
-                        errors.update({command: e.message})
-                    self.current_command = ''
-                    if function_list[func] is True:
-                        function_list.remove(func)
+                try:
+                    if PRINT_MESSAGES is True:
+                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4, sort_keys=True)), 'blue')
+                    r = function(val, self, binary=binary)
+                    if r:
+                        r.distribute(self.current_command, self)
+                except ClientError as e:
+                    self.logger.error(e)
+                    errors.update({command: e.message})
+                self.current_command = ''
             else:
                 unimplemented.append(command)
                 if 'unimplemented' in errors:
@@ -199,29 +170,24 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
                 user = User.objects.get(pk=uid)
+                self.logger.debug(user.username)
                 self.session = session
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
+                session = None
+                user = None
 
-        self.logger.debug('uid, session: %s, %s' % (str(uid), str(session)))
+        #self.logger.debug('uid, session: %s, %s' % (str(uid), str(session)))
         return session, user
 
     def session_success(self, res):
-        session = res
-        self.session_inst = session
-        self.session = session.get_decoded()
-        admin_access = False
-        if self.session.get('admin_access', False) is True:
-            self.update_session('permissions', self.conf_perms[0])
-            admin_access = True
-        else:
-            self.update_session('permissions', self.conf_perms[len(self.conf_perms) - 1])
-        #if self.session.get('logged_in', False) is True or admin_access is True:
-        #    auth_response = {'authenticate': {'authenticate': 'success'}}
-        #else:
-        #    auth_response = {'authenticate': {'authenticate': 'failure',
-        #                                      'loginUrl': reverse('conference_login')}}
-        #self.sendMessage(json.dumps(auth_response))
+        if res:
+            session, user = res
+            if user.is_authenticated():
+                auth_response = {'authenticate': {'authenticate': 'success'}}
+            else:
+                    auth_response = {'authenticate': {'authenticate': 'failure'}}
+            self.sendMessage(json.dumps(auth_response))
 
     def session_error(self, err):
         h = colored('Session Confirmation Errback: '
@@ -230,12 +196,11 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         e = colored(err, 'red', attrs=['bold'])
         print (e + h)
 
-        #auth_response = {'authenticate': {'authenticate': 'failure',
-        #                                  'loginUrl': reverse('conference_login')}}
-        #self.sendMessage(json.dumps(auth_response))
+        auth_response = {'authenticate': {'authenticate': 'failure'}}
+        self.sendMessage(json.dumps(auth_response))
 
-        #self.logger.debug('Session error: %s' % str(err))
-        #self.sendClose(code=AUTHENTICATION_FAILURE, reason=u'Invalid session id.')
+        self.logger.debug('Session error: %s' % str(err))
+        self.sendClose(code=AUTHENTICATION_FAILURE, reason=u'Invalid session id.')
         self.factory.unregister(self)
 
     def update_session(self, key, value):
@@ -262,9 +227,11 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     commands = {}
 
     def __init__(self, url, debug=False, debugCodePaths=False):
+        self.load_commands(TWISTED_COMMANDS)
         cprint('Modules: {}'.format(self.command_modules_init), 'yellow')
         cprint('Commands: {}'.format(self.commands), 'yellow')
         cprint('Initializing Protocol...', 'green')
+        cprint('{}'.format(settings.TWISTED_STUFF), 'red')
 
         WebSocketServerFactory.__init__(self, url, debug=debug, debugCodePaths=debugCodePaths)
 
@@ -274,11 +241,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
         #This is the global state for all connections.
         self.conn_state = {}
-
-        self.update_queue = Queue.Queue()
-
-        lc = LoopingCall(self.process_data)
-        lc.start(0)
 
         for module in self.command_modules_init:
             module(self)
@@ -323,10 +285,14 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         """
         for key, value in comm.items():
             if not isfunction(value):
-                module = ".".join(value.split(".")[:-1])
-                func = value.split(".")[-1]
-                _temp = __import__(module, globals(), locals(), [func, ], -1)
-                value = getattr(_temp, func)
+                try:
+                    module = ".".join(value.split(".")[:-1])
+                    func = value.split(".")[-1]
+                    _temp = __import__(module, globals(), locals(), [func, ], -1)
+                    value = getattr(_temp, func)
+                    comm[key] = value
+                except ImportError:
+                    pass
             if not isinstance(key, str) or not isfunction(value):
                 raise ValueError(u'All server commands must be string:function pairs.')
             self.commands = comm
@@ -336,61 +302,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def update_global_state(self, state):
         self.conn_state.update(state)
-
-    def process_data(self, *args, **kwargs):
-        if self.update_queue.empty():
-            return
-        while not self.update_queue.empty():
-            message = self.update_queue.get(False)
-            try:
-                if message['type'] != 'message':
-                    continue
-            except (TypeError, KeyError):
-                continue
-            for conn in self.conn_subscriptions[message['channel']]:
-                msg = json.dumps({
-                    'new_data_point': {
-                        'key': message['channel'],
-                        'data': message['data']['data'],
-                        'time': message['data']['time'],
-                    },
-                })
-                #cprint('sending {} to {} '.format(msg, str(conn)))
-                conn.sendMessage(msg)
-
-    def subscribe(self, connection, regex):
-        """
-            Key is a string
-        """
-        print 'RegEx: ' + regex
-        if type(regex) == str or type(regex) == unicode:
-            regex = re.compile(regex)
-        for key, conn_list in self.conn_subscriptions.items():
-            if regex.match(key) is not None:
-                print 'Match: ' + str(regex.match(key))
-                conn_list.append(connection)
-                print 'RegEx: ' + str(self.conn_subscriptions)
-                return True
-        if DEBUG:
-            printerror('No key matching your regex was found.')
-            printerror(self.conn_subscriptions)
-
-        raise DataSetNotAvailableError('The key {} is not active.'.format(regex))
-
-    def unsubscribe(self, connection, regex):
-        """
-            Key is a string
-        """
-        if type(regex) == str:
-            regex = re.compile(str)
-        for key, conn_list in self.conn_subscriptions.items():
-            if regex.match(key):
-                try:
-                    conn_list.remove(connection)
-                except ValueError:
-                    raise KeyError('This connection is not subscribed to this data feed.')
-                    if DEBUG:
-                        printerror('You are not subscribed to that feed.')
 
     @classmethod
     def register_command(cls, key, func, run_once=False):
@@ -408,27 +319,3 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     @classmethod
     def register_command_module(cls, init_func):
         cls.command_modules_init.append(init_func)
-
-
-def main():
-    if len(sys.argv) > 1 and sys.argv[1] == 'debug':
-        log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
-        debug = True
-    else:
-        debug = False
-
-    if len(sys.argv) > 1:
-        factory = DjangoWSServerFactory("ws://localhost:{port}".format(port=sys.argv[1]),
-                                        debug=debug,
-                                        debugCodePaths=debug)
-        factory.load_commands(wssettings.TWISTED_COMMANDS)
-        factory.protocol = DjangoWSServerProtocol
-        factory.setProtocolOptions(allowHixie76=True)
-        listenWS(factory)
-
-        reactor.run()
-
-
-if __name__ == '__main__':
-    with AtExit():
-        main()
