@@ -2,22 +2,25 @@ import json
 import logging
 import os
 import sys
+from options import get_options
+(options, args) = get_options()
 
 #--------------- Set up the Django environment ---------------#
-ROOT = os.path.dirname(os.path.dirname(__file__))
-sys.path.insert(0, ROOT)
-os.environ['PYTHONPATH'] = ROOT
+sys.path.insert(0, options.path)
+os.environ['PYTHONPATH'] = options.path
 os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
 import settings
 
 from django.contrib.sessions.models import Session
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
 from django.db import models
 
 #--------------- twisted server imports---------------#
 from twisted.internet.threads import deferToThread
+from twisted.internet import reactor
+from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
+                                listenWS,
                                 WebSocketServerProtocol)
 from termcolor import colored, cprint
 from inspect import isfunction
@@ -25,7 +28,6 @@ from inspect import isfunction
 from twisted_command_utilities import (ClientError,
                                        who_called_me,
                                        generic_deferred_errback,)
-from wssettings import TWISTED_COMMANDS
 
 PRINT_MESSAGES = False
 DEBUG = True
@@ -226,8 +228,8 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     command_modules_init = []
     commands = {}
 
-    def __init__(self, url, debug=False, debugCodePaths=False):
-        self.load_commands(TWISTED_COMMANDS)
+    def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
+        self.load_commands(commands)
         cprint('Modules: {}'.format(self.command_modules_init), 'yellow')
         cprint('Commands: {}'.format(self.commands), 'yellow')
         cprint('Initializing Protocol...', 'green')
@@ -319,3 +321,25 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     @classmethod
     def register_command_module(cls, init_func):
         cls.command_modules_init.append(init_func)
+
+
+def run_server(commands):
+    if options.debug:
+        log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
+        debug = True
+    else:
+        debug = False
+    debug = True
+
+    factory = DjangoWSServerFactory("ws://localhost:" + options.port,
+                                    commands=commands,
+                                    debug=debug,
+                                    debugCodePaths=debug)
+    cprint('Created factory: {}'.format(factory), 'green')
+
+    factory.protocol = DjangoWSServerProtocol
+    factory.setProtocolOptions(allowHixie76=True)
+    listenWS(factory)
+    cprint('Listening...', 'green')
+
+    reactor.run()
