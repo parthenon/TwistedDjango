@@ -7,7 +7,7 @@ from options import get_options
 if '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
 elif 'TWISTED_DJANGO_OPTIONS' in os.environ:
-    (options, args) = get_options()
+    options = get_empty_options()
     options.project = os.environ['TWISTED_DJANGO_OPTIONS_PROJECT']
     options.port = os.environ['TWISTED_DJANGO_OPTIONS_PORT']
     options.path = os.environ['TWISTED_DJANGO_OPTIONS_PATH']
