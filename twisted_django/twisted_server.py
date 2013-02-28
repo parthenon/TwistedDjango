@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import sys
-from options import get_options
+from options import get_options, get_empty_options
 
 if '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
