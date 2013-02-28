@@ -6,21 +6,31 @@ from options import get_options, get_empty_options
 
 if '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
-elif 'TWISTED_DJANGO_OPTIONS' in os.environ:
-    options = get_empty_options()
-    options.project = os.environ['TWISTED_DJANGO_OPTIONS_PROJECT']
-    options.port = os.environ['TWISTED_DJANGO_OPTIONS_PORT']
-    options.path = os.environ['TWISTED_DJANGO_OPTIONS_PATH']
-    if os.environ['TWISTED_DJANGO_OPTIONS_DEGUG'] == "True":
-        options.debug = True
+    sys.path.insert(0, options.path)
+    os.environ['PYTHONPATH'] = options.path
+    os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
+    import settings
 else:
-    raise NotImplemented
-
+    try:
+        from django.conf import settings
+        if not hasattr(settings, 'TWISTED_DJANGO_PROJECT'):
+            raise Exception("TWISTED_DJANGO_PROJECT setting not set")
+        if not hasattr(settings, 'TWISTED_DJANGO_PATH'):
+            raise Exception("TWISTED_DJANGO_PATH setting not set")
+        options = get_empty_options()
+        options.project = settings.TWISTED_DJANGO_PROJECT
+        options.path = settings.TWISTED_DJANGO_PATH
+        if hasattr(settings, 'TWISTED_DJANGO_PORT'):
+            options.port = settings.TWISTED_DJANGO_PORT
+        else:
+            options.port = "8080"
+        if hasattr(settings, 'TWISTED_DJANGO_DEBUG'):
+            options.debug = True
+        else:
+            options.debug = False
+    except Exception as e:
+        raise e
 #--------------- Set up the Django environment ---------------#
-sys.path.insert(0, options.path)
-os.environ['PYTHONPATH'] = options.path
-os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
-import settings
 
 from django.contrib.sessions.models import Session
 from django.contrib.auth.models import User
