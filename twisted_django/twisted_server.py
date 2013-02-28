@@ -3,7 +3,13 @@ import logging
 import os
 import sys
 from options import get_options
-(options, args) = get_options()
+
+if '-f' in sys.argv or '--path' in sys.argv:
+    (options, args) = get_options()
+elif 'TWISTED_DJANGO_OPTIONS' in os.environ:
+    options = os.environ['TWISTED_DJANGO_OPTIONS']
+else:
+    raise NotImplemented
 
 #--------------- Set up the Django environment ---------------#
 sys.path.insert(0, options.path)
