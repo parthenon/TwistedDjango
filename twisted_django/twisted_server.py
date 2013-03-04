@@ -200,9 +200,10 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
-                self.user = User.objects.get(pk=uid)
-                self.logger.debug(self.user.username)
+                user = User.objects.get(pk=uid)
+                self.logger.debug(user.username)
                 self.session = session
+                self.user = user
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
                 session = None
