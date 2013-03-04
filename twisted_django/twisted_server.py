@@ -94,6 +94,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         except KeyError:
             pass
 
+    def onClose(self, wasClean, code, reason):
+        close_handler = self.commands.get('onClose', None)
+
+        if not close_handler:
+            return
+
+        close_handler(self, self.user.pk)
+
     def onMessage(self, msg, binary):
         """
             Process a message from the client.
@@ -192,8 +200,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
-                user = User.objects.get(pk=uid)
-                self.logger.debug(user.username)
+                self.user = User.objects.get(pk=uid)
+                self.logger.debug(self.user.username)
                 self.session = session
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')

@@ -38,6 +38,7 @@ class CommandResponse:
         self.cleanup_funcs = []
         self.deferred = deferred
         self.deferred_response = deferred_response
+        self.everyone_else = False
 
     def distribute(self, command_name, connection, everyone_else=False):
         """
