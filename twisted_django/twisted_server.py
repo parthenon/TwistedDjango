@@ -89,6 +89,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
         self.conn_state = {key: None for key, value in self.commands.items()}
         self.conn_state.update(connection_state={})
+        self._local_state = {}
         try:
             self.default_command = self.commands.pop('default')
         except KeyError:
@@ -100,7 +101,17 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         if not close_handler:
             return
 
-        close_handler(self, self.user.pk)
+        if self.user:
+            user_id = self.user.pk
+        else:
+            user_id = None
+
+        message = {
+            'user_id': user_id,
+            'type': self.get_state('type')
+        }
+
+        close_handler(message, self)
 
     def onMessage(self, msg, binary):
         """
@@ -250,6 +261,15 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                       self.session_id,
                       self.session,
                       self.session_inst.expire_date)
+
+    def get_state(self, key, default=None):
+        try:
+            return self._local_state[key]
+        except KeyError:
+            return default
+
+    def set_state(self, key, value):
+        self._local_state[key] = value
 
 
 class DjangoWSServerFactory(WebSocketServerFactory):
