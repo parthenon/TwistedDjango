@@ -31,6 +31,7 @@ $( function() {
             if(twistedDebug) {
                 console.log("Connected to " + wsuri);
             }
+            //echo_test();
             authenticateTwistedDjango();
         }
         sock.onclose = function(e) {
@@ -43,9 +44,8 @@ $( function() {
                             e.reason + "')");
             }
             sock = null;
-            $('#connex_global_error').text('The connection has been closed').show();
-            loadParticipants(undefined);
-            updateTable(undefined);
+            //loadParticipants(undefined);
+            //updateTable(undefined);
             
         }
         sock.onmessage = function(e) {
@@ -93,9 +93,17 @@ $( function() {
     }
 });
 
+function echo_test() {
+    sock.registerListener('echo_test', echo_alert, false);
+    sock.send(JSON.stringify({echo_test: {message: "Hello, World!"}}));
+}
+
+function echo_alert(response) {
+    alert(response.message);
+}
+
 function authenticateTwistedDjango() {
     var url_split = document.URL.split('/');
-    conf_id = url_split[url_split.length - 1];
 
     $.ajax({ type:'GET',
              url:'/accounts/session_id',
@@ -105,10 +113,6 @@ function authenticateTwistedDjango() {
     authentication_obj = {'authenticate':session_id};
     if(sock != null) {
         sock.send(JSON.stringify(authentication_obj));
-    }
-    authenticate_user = {'authenticate_user': {'conf_id':conf_id}}
-    if(sock != null) {
-        sock.send(JSON.stringify(authenticate_user));
     }
     sock.registerListener('authenticate', authenticated, true);
 
@@ -120,42 +124,16 @@ function authenticateTwistedDjango() {
     });
 }
 
-function authenticated(response_val) {
-    if('error' in response_val) {
-        $('#connex_global_error').text('Authentication failed! Trying again in: 5').show();
-        authSecondsElapsed = 0;
-        authRetryIntervalId = window.setInterval(authenticationFailed, 5000);
-        return;
+function authenticated(response) {
+    if (response.authenticate === "success") {
+        alert("Authenticated!");
     } else {
-        $('#connex_global_error').text('').hide();
+        authenticationFailed();
     }
-    
-    if(typeof(connectToChat) !== 'undefined')
-        connectToChat(response_val);
-    if(typeof(initParticipants) !== 'undefined')
-        initParticipants(response_val);
-    if(typeof(initMisc) !== 'undefined')
-        initMisc(response_val);
-    if(typeof(initQuestions) !== 'undefined')
-        initQuestions(response_val);
-    if(typeof(initWhosOnline) !== 'undefined')
-        initWhosOnline(response_val);
 }
 
-function authenicationFailed() {
-    authSecondsElapsed += 1;
-    if(authSecondsElapsed === 5) {
-        window.clearInterval(authRetryIntervalId);
-        authentication_obj = {'authenticate':session_id};
-        if(sock != null) {
-            sock.send(JSON.stringify(authentication_obj));
-        }
-        $('#connex_global_error').hide();
-    } else {
-        $('#connex_global_error').text('Authentication failed! Trying again in: ' + 
-                                       (5 - authSecondsElapsed) ).show();
-        authRetryIntervalId = window.setInterval(authenticationFailed, 5000);
-    }
+function authenticationFailed() {
+    alert("Authentication Failed");
 }
 
 $(document).ready(function() {
