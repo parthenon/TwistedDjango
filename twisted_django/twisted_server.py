@@ -38,7 +38,7 @@ from django.db import models
 
 #--------------- twisted server imports---------------#
 from twisted.internet.threads import deferToThread
-from twisted.internet import reactor
+from twisted.internet import reactor, task
 from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
                                 listenWS,
@@ -261,6 +261,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                       self.session_id,
                       self.session,
                       self.session_inst.expire_date)
+
+    def callLater(self, seconds, func, *args, **kwargs):
+        task.deferLater(reactor, seconds, func, *args, **kwargs)
 
     def get_state(self, key, default=None):
         try:
