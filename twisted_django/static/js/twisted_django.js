@@ -1,147 +1,120 @@
-var sock = {};
-var ellog = null;
-var session_id = null;
-var redirectingToLogin = false;
+// connex/twisted_django_server/twisted_django.js
+// jslint browser: true
 
-window.WEB_SOCKET_DEBUG = true;
-var printNewData = false;
-
-console.log('Initializing socket');
-
-window.WEB_SOCKET_SWF_LOCATION ="/static/web-socket/WebSocketMain.swf";
-ellog = document.getElementById('log');
-
-if (window.location.protocol === "file:") {
-    wsuri = "ws://127.0.0.1:31415";
-} else {
-    wsuri = "ws://" + window.location.hostname + ":31415";
-}
-
-if ("MozWebSocket" in window) {
-    sock = new MozWebSocket(wsuri);
-} else {
-    sock = new WebSocket(wsuri);
-    if(window.WEB_SOCKET_DEBUG) {
-        console.log("WS-URI", wsuri);
-        console.log("SOCK AFTER CONNECT: " + sock);
-    }
-}
-
-console.log(wsuri);
-
-sock.listeners = {};
-sock.initFuncs = [];
-sock.connected = false;
-sock.state = 'Initializing connection.';
-
-sock.onopen = function() {
-    if(window.WEB_SOCKET_DEBUG) {
-        console.log("Connected to " + wsuri);
-    }
-    sock.state = 'Authenticating.';
+sock = function(wsuri, debug) {
+    window.WEB_SOCKET_DEBUG = true;
+    window.WEB_SOCKET_SWF_LOCATION ="/static/web-socket/WebSocketMain.swf";
     
-    //Authenticate the connection against the website
-    sock.authenticate(function(response) {
-        //TODO: finish this function
-        state = 'Authentication failed';
-        console.log('Authentication failed');
-        return;
-    });
-
-    sock.state = 'Authenticated'
-    sock.connected = true;
-    for(var i = 0; i < this.initFuncs.length; i++) {
-        this.initFuncs[i]();
+    var sock;
+    var listeners = {};
+    var init_funcs = [];
+    var connected = false;
+    var auth_func = function() {
+        return false;
     }
-}
-sock.onclose = function(e) {
-    if(window.WEB_SOCKET_DEBUG) {
-        console.log("Connection closed (wasClean = " + 
-                    e.wasClean + 
-                    ", code = " + 
-                    e.code + 
-                    ", reason = '" + 
-                    e.reason + "')");
+    var authenticated = false;
+    
+    //Initialization stuff
+    ellog = document.getElementById('log');
+    if (window.location.protocol === "file:") {
+        wsuri = "ws://192.168.1.135:8080";
+    } else {
+        wsuri = "ws://" + window.location.hostname + ":31415";
     }
-    sock.connected = false;
-    sock.state = 'Disconnected: ' + e.reason;
-}
-sock.onmessage = function(e) {
-    response = JSON.parse(e.data);
-    if(window.WEB_SOCKET_DEBUG) {
-        if(response['new_data_point'] === undefined || printNewData === true) {
-            console.log("Response: ", response);
+    if ("MozWebSocket" in window) {
+        sock = new MozWebSocket(wsuri);
+    } else {
+        sock = new WebSocket(wsuri);
+        if(debug) {
+            console.log("WS-URI", wsuri);
+            console.log("SOCK AFTER CONNECT: " + sock);
         }
     }
-    var value = null;
-    var spent_commands = new Array();
-    for (var key in response) {
-        commands = this.listeners[key];
-        if(typeof commands === 'undefined') {
-            continue;
-        } else {
-            if(commands.length > 0) {
-                for(var i = 0;i < commands.length;i++) {
-                    commands[i]['listener'](response[key]);
-                    if(commands[i]['run_once'] === true) {
-                        spent_commands.push(i);
+    sock.onopen = function() {
+        if(debug) {
+            console.log("Connected to " + wsuri);
+        }
+
+        authenticateTwistedDjango();
+        connected = true;
+    }
+    sock.onclose = function(e) {
+        if(debug) {
+            console.log("Connection closed (wasClean = " + 
+                        e.wasClean + 
+                        ", code = " + 
+                        e.code + 
+                        ", reason = '" + 
+                        e.reason + "')");
+        }
+        connected = false;
+    }
+    sock.onmessage = function(e) {
+        response = JSON.parse(e.data);
+        if(debug) {
+            console.log("Response: ", response);
+        }
+        var value = null;
+        var spent_commands = new Array();
+        for (var key in response) {
+            commands = this.listeners[key];
+            if(typeof commands === 'undefined') {
+                continue;
+            } else {
+                if(commands.length > 0) {
+                    for(var i = 0;i < commands.length;i++) {
+                        commands[i]['listener'](response[key]);
+                        if(commands[i]['run_once'] === true) {
+                            spent_commands.push(i);
+                        }
                     }
-                }
-                if(spent_commands.length > 0) {
-                    for(var i = spent_commands.length; i >= 0; i--) {
-                        this.listeners[key].splice(spent_commands[i], 1);
+                    if(spent_commands.length > 0) {
+                        for(var i = spent_commands.length; i >= 0; i--) {
+                            this.listeners[key].splice(spent_commands[i], 1);
+                        }
+                        this.listeners[key] = commands;
                     }
-                    this.listeners[key] = commands;
+                    spent_commands = new Array();
                 }
-                spent_commands = new Array();
             }
         }
     }
-}
-sock.onready = function(func) {
-    this.initFuncs.push(func);
-};
-sock.on = function(key, listener, once) {
-    if(window.WEB_SOCKET_DEBUG) {
-        console.log('adding listener: ', key);
+
+    return {
+        echo_alert: function(response) {
+            alert(response.message);
+        },
+        echo_test: function() {
+            sock.registerListener('echo_test', echo_alert, false);
+            sock.send(JSON.stringify({
+                echo_test: {
+                    message: "Hello, World!"
+                }
+            }));
+        },
+        is_authenticated = function() {
+            return authenticated;
+        },
+        is_connected = function() {
+            return connected;
+        },
+        onready = function(func) {                                                                                                                                                                                     
+            init_funcs.push(func);
+        },
+        on = function(key, listener, once) {
+            if(debug) {
+                console.log('adding listener: ', key);
+            }   
+            if(typeof(listeners) == 'undefined'){
+                listeners = {}; 
+            }   
+            if(typeof(sock.listeners[key]) == 'undefined'){
+                sock.listeners[key] = new Array();
+            }   
+            sock.listeners[key].push({
+                'listener':listener, 
+                'run_once':once
+            });
+        },
     }
-    if(typeof(this.listeners) == 'undefined'){
-        this.listeners = {};
-    }
-    if(typeof(this.listeners[key]) == 'undefined'){
-        this.listeners[key] = new Array();
-    }
-    this.listeners[key].push({'listener':listener, 'run_once':once});
-};
-sock.isConnected = function() {
-    return sock.connected;
-}
-
-
-sock.authenticate = function(callback) {
-    var url_split = document.URL.split('/');
-    //sock.send(JSON.stringify({'get_available_sets': {}}));
-
-    //$.ajax({ type:'GET',
-    //         url:'/accounts/session_id',
-    //         async:false,
-    //         success:function(text){session_id = text;}
-    //       });
-    //authentication_obj = {'authenticate':session_id};
-    //if(sock != null) {
-    //    sock.send(JSON.stringify(authentication_obj));
-    //}
-    //authenticate_user = {'authenticate_user': {'':conf_id}}
-    //if(sock != null) {
-    //    sock.send(JSON.stringify(authenticate_user));
-    //}
-    //sock.registerListener('authenticate', authenticated, true);
-
-    //make sure to clean up the socket when finished
-
-    $(window).unload(function() {
-        sock.close();
-    });
-}
-
-
+});
