@@ -363,11 +363,11 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     @classmethod
     def register_command(cls, key, func, run_once=False):
         if key in cls.commands:
-            cls.commands[key].update({func: run_once})
+            cls.commands[key] = func
             if not isinstance(key, str) or not isfunction(func):
                 raise ValueError(u'All server commands must be string:function pairs.')
         else:
-            cls.commands[key] = {func: run_once}
+            cls.commands[key] = func
 
     @classmethod
     def remove_command(cls, key, func, run_once=False):
