@@ -210,6 +210,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_id = kwargs.pop('session_id', None)
         self.logger.debug('Entering confirm_session session_id:%s' % self.session_id)
         if not self.session or isinstance(self.session, models.Model):
+            cprint('Loading session')
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
