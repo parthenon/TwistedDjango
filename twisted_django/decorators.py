@@ -15,7 +15,7 @@ def twisted_command(run_once=False):
     def dec(func):
         (required_args, func_varargs, func_keywords, func_defaults) = getargspec(func)
         try:
-            required_args = required_args.remove('connection')
+            required_args.remove('connection')
         except ValueError:
             print('ArgumentError: The connection argument is required for all command functions.')
             print('Error in the definition of {}'.format(func))
