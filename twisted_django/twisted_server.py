@@ -87,7 +87,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         else:
             self.logger.setLevel(logging.ERROR)
 
-        self.conn_state = {key: None for key, value in self.commands.items()}
+        self.conn_state = {}
+        for key, value in self.commands.items():
+            self.conn_state[key] = value
         self.conn_state.update(connection_state={})
         self._local_state = {}
         try:
