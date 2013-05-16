@@ -135,15 +135,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.default_command(msg, binary)
         if not message:
             return
-        if 'authenticate' in message:
-            self.logger.debug('authenticating')
-            auth = message.pop('authenticate')
-            self.logger.debug(auth)
-            d = deferToThread(self.confirm_session, session_id=auth)
-            d.addCallback(self.session_success)
-            d.addErrback(self.session_error)
-            return
-
         self.process_message(message, binary)
 
     def connectionLost(self, reason):
@@ -329,7 +320,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
             c.sendMessage(msg)
 
     def send_to_subset(self, clients, msg):
-        msg = json.dumps(json.loads(msg), indent=4, sort_keys=True)
+        msg = json.dumps(json.loads(msg))#, indent=4, sort_keys=True)
         if DEBUG:
             cprint('Sending to browser: {0}'.format(msg), 'yellow')
         for client in clients:

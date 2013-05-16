@@ -60,22 +60,23 @@ sock = function(debug, wsuri, disable_authentication) {
 
     sock.onmessage = function(e) {
         response = JSON.parse(e.data);
-        if(debug) {
-            //console.log("Response: ", response);
-        }
         var value = null;
         var spent_commands = new Array();
         for(var key in response) {
+            if(debug) {
+                console.log("%c {0}: ".format(key), 'color: #31c96a' , response);
+            }
             if(key === 'authenticate' && disable_authentication === false) {
                 if(response[key]['authenticate'] === 'success') {
                     authenticated = true;
                     if(connected === true) {
                         ready = true;
                     }
+                    user_name = response[key]['name'];
+                    permissions = response[key]['permissions'];
                     for(var i = 0; i < init_funcs.length; i++) {
                         init_funcs[i]();
                     }
-                    user_name = response[key]['name'];
                 } else {
                     if(response['loginUrl'] !== undefined) {
                         loginUrl = response['loginUrl'];

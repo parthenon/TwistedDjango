@@ -10,7 +10,9 @@ function authenticateTwistedDjango(on_authentication_response) {
 
     console.log(session_id);
     authentication_obj = {
-        'authenticate': session_id
+        'authenticate': {
+            'session_id': session_id
+        }
     };
 
     sock.send(JSON.stringify(authentication_obj));
