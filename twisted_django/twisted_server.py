@@ -59,7 +59,7 @@ AUTHENTICATION_FAILURE = None
 
 
 def printerror(msg):
-    errormsg = '{}: {}'.format(who_called_me(), msg)
+    errormsg = '{0}: {1}'.format(who_called_me(), msg)
     cprint(errormsg, 'red')
 
 
@@ -285,10 +285,10 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
         self.load_commands(commands)
-        cprint('Modules: {}'.format(self.command_modules_init), 'yellow')
-        cprint('Commands: {}'.format(self.commands), 'yellow')
+        cprint('Modules: {0}'.format(self.command_modules_init), 'yellow')
+        cprint('Commands: {0}'.format(self.commands), 'yellow')
         cprint('Initializing Protocol...', 'green')
-        cprint('{}'.format(settings.TWISTED_STUFF), 'red')
+        cprint('{0}'.format(settings.TWISTED_STUFF), 'red')
 
         WebSocketServerFactory.__init__(self, url, debug=debug, debugCodePaths=debugCodePaths)
 
@@ -397,7 +397,7 @@ def run_server(commands, sslcontext = None):
                                         debug=debug,
                                         debugCodePaths=debug)
 
-    cprint('Created factory: {}'.format(factory), 'green')
+    cprint('Created factory: {0}'.format(factory), 'green')
 
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
