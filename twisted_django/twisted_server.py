@@ -87,7 +87,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         else:
             self.logger.setLevel(logging.ERROR)
 
-        self.conn_state = {key: None for key, value in self.commands.items()}
+        self.conn_state = {}
+        for key, value in self.commands.items():
+            self.conn_state[key] = value
         self.conn_state.update(connection_state={})
         self._local_state = {}
         try:
@@ -133,15 +135,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.default_command(msg, binary)
         if not message:
             return
-        if 'authenticate' in message:
-            self.logger.debug('authenticating')
-            auth = message.pop('authenticate')
-            self.logger.debug(auth)
-            d = deferToThread(self.confirm_session, session_id=auth)
-            d.addCallback(self.session_success)
-            d.addErrback(self.session_error)
-            return
-
         self.process_message(message, binary)
 
     def connectionLost(self, reason):
@@ -208,12 +201,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_id = kwargs.pop('session_id', None)
         self.logger.debug('Entering confirm_session session_id:%s' % self.session_id)
         if not self.session or isinstance(self.session, models.Model):
+            cprint('Loading session', 'red')
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
                 user = User.objects.get(pk=uid)
                 self.logger.debug(user.username)
-                self.session = session
+                self.session = session.get_decoded()
+                cprint('session: {}'.format(self.session), 'red')
                 self.user = user
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
@@ -325,7 +320,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
             c.sendMessage(msg)
 
     def send_to_subset(self, clients, msg):
-        msg = json.dumps(json.loads(msg), indent=4, sort_keys=True)
+        msg = json.dumps(json.loads(msg))#, indent=4, sort_keys=True)
         if DEBUG:
             cprint('Sending to browser: {0}'.format(msg), 'yellow')
         for client in clients:
