@@ -98,7 +98,10 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             pass
 
     def onClose(self, wasClean, code, reason):
-        close_handler = self.commands.get('onClose', None)
+        try:
+            close_handler = self.commands.get('onClose', None)
+        except AttributeError:
+            close_handler = None
 
         if not close_handler:
             return
