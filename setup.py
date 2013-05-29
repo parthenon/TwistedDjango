@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='djangotwisted',
-    version='0.1.1',
+    version='0.1.2',
     description='Reusable websockets with Twisted in Django',
     author='Casey Beach',
     author_email='casey@parthenonsoftware.com',
