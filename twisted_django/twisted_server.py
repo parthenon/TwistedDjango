@@ -378,7 +378,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         cls.command_modules_init.append(init_func)
 
 
-def run_server(commands):
+def run_server(commands, sslcontext = None):
     if options.debug:
         log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
         debug = True
@@ -386,15 +386,26 @@ def run_server(commands):
         debug = False
     debug = True
 
-    factory = DjangoWSServerFactory("ws://localhost:" + options.port,
-                                    commands=commands,
-                                    debug=debug,
-                                    debugCodePaths=debug)
+    if sslcontext is not None:
+        factory = DjangoWSServerFactory("wss://localhost:" + options.port,
+                                        commands=commands,
+                                        debug=debug,
+                                        debugCodePaths=debug)
+    else:
+        factory = DjangoWSServerFactory("ws://localhost:" + options.port,
+                                        commands=commands,
+                                        debug=debug,
+                                        debugCodePaths=debug)
+
     cprint('Created factory: {}'.format(factory), 'green')
 
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
-    listenWS(factory)
+    if sslcontext is not None:
+        listenWS(factory, sslcontext)
+    else:
+        listenWS(factory)
+
     cprint('Listening...', 'green')
 
     reactor.run()
