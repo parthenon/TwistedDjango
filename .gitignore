@@ -1,3 +1,4 @@
 *.swp
 *.pyc
 djangotwisted.egg-info
+socketpolicy/log
