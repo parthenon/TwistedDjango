@@ -303,7 +303,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         client.user_number = self.client_count
 
     def unregister(self, client):
-        return
         if client in self.clients:
             del self.clients[client]
         if client in self.conn_state:
