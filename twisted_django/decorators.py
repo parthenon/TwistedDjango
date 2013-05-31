@@ -39,3 +39,11 @@ def twisted_command(run_once=False):
         DjangoWSServerFactory.register_command(command_name, wrapper, run_once)
         return wrapper
     return dec
+
+
+def on_close(func):
+    DjangoWSServerFactory.register_event('close', func)
+    return func
+
+
+

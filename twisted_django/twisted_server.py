@@ -107,6 +107,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             user_id = self.user.pk
         else:
             user_id = None
+        self.factory.unregister(self)
 
         message = {
             'user_id': user_id,
