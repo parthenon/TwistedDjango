@@ -47,6 +47,7 @@ class CommandResponse:
         """
         self.command_name = command_name
         self.connection = connection
+        self.everyone_else = everyone_else
         if self.deferred:
             self.deferred.addCallback(self._send_response)
         else:
@@ -57,16 +58,20 @@ class CommandResponse:
             def_resp = self.deferred_response[0]
             def_resp_args = self.deferred_response[1]
         if len(self.recipients) == 0:
+            print "No recipients: " + self.command_name + ":" + str(self.response)
             self.connection.sendMessage(json.dumps({self.command_name: self.response}))
             if self.deferred_response:
                 self.connection.sendMessage(json.dumps(def_resp(def_resp_args)))
         else:
             if self.everyone_else is True:
+                print "Everyone else: " + self.command_name + ":" + str(self.response)
+                recipients = filter(lambda a: a != self.connection, self.recipients)
                 self.connection.factory.send_to_subset(
-                    self.recipients,
-                    json.dumps({self.command_name: self.response}),
-                    everyone_but=self.connection)
+                    recipients,
+                    json.dumps({self.command_name: self.response})
+                    )
             else:
+                print "Subset: " + self.command_name + ":" + str(self.response)
                 self.connection.factory.send_to_subset(
                     self.recipients,
                     json.dumps({self.command_name: self.response}))
