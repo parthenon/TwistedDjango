@@ -4,7 +4,11 @@ conf_id = url_split[url_split.length - 1];
 sock = function(debug, wsuri, disable_authentication) {
     window.WEB_SOCKET_DEBUG = true;
     window.WEB_SOCKET_SWF_LOCATION ="/static/web-socket/WebSocketMain.swf";
-    
+    function close_websocket() {
+        console.log('closing websocket!');
+        sock.close();
+    }
+    $(window).on('beforeunload', close_websocket);
     var sock;
     var listeners = {};
     var init_funcs = [];
