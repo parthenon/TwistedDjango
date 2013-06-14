@@ -9,7 +9,7 @@ sock = function(debug, wsuri, disable_authentication) {
         sock.close();
     }
     $(window).on('beforeunload', close_websocket);
-    var sock;
+    var sock = {};
     var listeners = {};
     var init_funcs = [];
     var connected = false;
@@ -24,16 +24,15 @@ sock = function(debug, wsuri, disable_authentication) {
     ellog = document.getElementById('log');
     wsuri = "ws://" + window.location.hostname + ":31415";
 
-    if ("MozWebSocket" in window) {
+    if ("MozWebSocket" in window && TESTING === false) {
         sock = new MozWebSocket(wsuri);
-    } else {
+    } else if(TESTING === false) {
         sock = new WebSocket(wsuri);
         if(debug) {
             //console.log("WS-URI", wsuri);
             //console.log("SOCK AFTER CONNECT: " + sock);
         }
-    }
-    if(TESTING === true) {
+    } else if(TESTING === true) {
         sock.send = function(msg) {
             if(typeof(testing_send_queue) === 'undefined') {
                 testing_send_queue = [];
