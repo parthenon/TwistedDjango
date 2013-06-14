@@ -310,7 +310,9 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
         for conf_id, conn_list in self.conn_state['conferences'].items():
             for conn in conn_list:
+                print "Found conn {0}".format(conn)
                 if conn is client:
+                    print "Removing client {1} from {0}".format(conf_id, client)
                     self.conn_state['conferences'][conf_id].remove(conn)
 
     def broadcast(self, msg):

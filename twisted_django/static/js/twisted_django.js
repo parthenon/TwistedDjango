@@ -64,6 +64,7 @@ sock = function(debug, wsuri, disable_authentication) {
 
     sock.onmessage = function(e) {
         response = JSON.parse(e.data);
+        console.log(e.data);
         var value = null;
         var spent_commands = new Array();
         for(var key in response) {
@@ -139,7 +140,7 @@ sock = function(debug, wsuri, disable_authentication) {
         },
         'on': function(key, listener, once) {
             if(debug) {
-                //console.log('adding listener: ', key);
+                //console.log('adding listener key: ', key, ",);
             }   
             if(typeof(listeners) == 'undefined'){
                 listeners = {}; 
