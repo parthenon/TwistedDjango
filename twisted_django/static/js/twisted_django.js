@@ -24,15 +24,15 @@ sock = function(debug, wsuri, disable_authentication) {
     ellog = document.getElementById('log');
     wsuri = "ws://" + window.location.hostname + ":31415";
 
-    if ("MozWebSocket" in window && TESTING === false) {
+    if ("MozWebSocket" in window && typeof(TESTING) !== 'undefined' && TESTING === false) {
         sock = new MozWebSocket(wsuri);
-    } else if(TESTING === false) {
+    } else if(typeof(TESTING) !== 'undefined' && TESTING === false) {
         sock = new WebSocket(wsuri);
         if(debug) {
             //console.log("WS-URI", wsuri);
             //console.log("SOCK AFTER CONNECT: " + sock);
         }
-    } else if(TESTING === true) {
+    } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
         sock.send = function(msg) {
             if(typeof(testing_send_queue) === 'undefined') {
                 testing_send_queue = [];
@@ -165,5 +165,8 @@ sock = function(debug, wsuri, disable_authentication) {
             sock.send(msg);
         }
     };
+    if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+        return_obj.sock = sock;
+    }
     return return_obj;
 }(true);
