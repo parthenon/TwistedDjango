@@ -32,6 +32,14 @@ sock = function(debug, wsuri, disable_authentication) {
             //console.log("SOCK AFTER CONNECT: " + sock);
         }
     }
+    if(TESTING === true) {
+        sock.send = function(msg) {
+            if(typeof(testing_send_queue) === 'undefined') {
+                testing_send_queue = [];
+            }
+            testing_send_queue.append(msg);
+        }
+    }
 
     sock.onopen = function() {
         if(debug) {
