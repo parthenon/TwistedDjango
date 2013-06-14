@@ -1,7 +1,20 @@
 url_split = document.URL.split('/');
 conf_id = url_split[url_split.length - 1];
 // twisted_django_server/twisted_django.js
-sock = function(debug, wsuri, disable_authentication) {
+
+// wsuri: This is where you're going to connect
+// debug: Displays a LOT of information about what's going on inside the closure
+// disable_authentication: Use this if there's not need for authentication in your project
+// testing: This will make the actual websocket available.  The websocket is normally locked away
+//          inside the closure
+
+sock = function(wsuri, debug, disable_authentication, testing) {
+    if(typeof(disable_authentication) === 'undefined') {
+        disable_authentication = false;
+    }
+    if(typeof(testing) === 'undefined') {
+        testing = false;
+    }
     window.WEB_SOCKET_DEBUG = true;
     window.WEB_SOCKET_SWF_LOCATION ="/static/web-socket/WebSocketMain.swf";
     function close_websocket() {
@@ -22,22 +35,21 @@ sock = function(debug, wsuri, disable_authentication) {
     
     //Initialization stuff
     ellog = document.getElementById('log');
-    wsuri = "ws://" + window.location.hostname + ":31415";
-
-    if ("MozWebSocket" in window && (typeof(TESTING) === 'undefined' || TESTING === false)) {
+        
+    if("MozWebSocket" in window && testing === false) {
         console.log("WebSocket");
         sock = new MozWebSocket(wsuri);
         if(debug) {
             console.log("WS-URI", wsuri);
             console.log("SOCK AFTER CONNECT: " + sock);
         }
-    } else if(typeof(TESTING) === 'undefined' || TESTING === false) {
+    } else if(testing === false) {
         sock = new WebSocket(wsuri);
         if(debug) {
             console.log("WS-URI", wsuri);
             console.log("SOCK AFTER CONNECT: " + sock);
         }
-    } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+    } else if(testing === true) {
         sock.send = function(msg) {
             if(typeof(testing_send_queue) === 'undefined') {
                 testing_send_queue = [];
@@ -51,7 +63,7 @@ sock = function(debug, wsuri, disable_authentication) {
             console.log("Connected to " + wsuri);
         }
         connected = true;
-        if(disable_authentication === false && (typeof(TESTING) === 'undefined' || TESTING === false)) {
+        if(disable_authentication === false && testing === false) {
             console.log("Authenticating");
             authenticateTwistedDjango(return_obj);
         } else {
@@ -174,14 +186,23 @@ sock = function(debug, wsuri, disable_authentication) {
             sock.send(msg);
         }
     };
-    if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+    if(testing === true) {
         return_obj.sock = sock;
         $(document).ready(function() {
-            if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+            if(testing === true) {
                 sock.sock.onopen();
             }
         });
     }
     return return_obj;
-}(true);
+};
 
+function start_server() {
+    wsuri = "ws://" + window.location.hostname + ":31415";
+    if(typeof(TESTING) === 'undefined' || TESTING === false) {
+        sock = sock(wsuri, true, false, false);
+    } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+        //sock = function(wsuri, debug, disable_authentication, testing) {
+        sock = sock(wsuri, true, true, true);
+    }
+}();
