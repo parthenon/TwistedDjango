@@ -24,29 +24,35 @@ sock = function(debug, wsuri, disable_authentication) {
     ellog = document.getElementById('log');
     wsuri = "ws://" + window.location.hostname + ":31415";
 
-    if ("MozWebSocket" in window && typeof(TESTING) !== 'undefined' && TESTING === false) {
+    if ("MozWebSocket" in window && (typeof(TESTING) === 'undefined' || TESTING === false)) {
+        console.log("WebSocket");
         sock = new MozWebSocket(wsuri);
-    } else if(typeof(TESTING) !== 'undefined' && TESTING === false) {
+        if(debug) {
+            console.log("WS-URI", wsuri);
+            console.log("SOCK AFTER CONNECT: " + sock);
+        }
+    } else if(typeof(TESTING) === 'undefined' || TESTING === false) {
         sock = new WebSocket(wsuri);
         if(debug) {
-            //console.log("WS-URI", wsuri);
-            //console.log("SOCK AFTER CONNECT: " + sock);
+            console.log("WS-URI", wsuri);
+            console.log("SOCK AFTER CONNECT: " + sock);
         }
     } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
         sock.send = function(msg) {
             if(typeof(testing_send_queue) === 'undefined') {
                 testing_send_queue = [];
             }
-            testing_send_queue.append(msg);
+            testing_send_queue.push(msg);
         }
     }
 
     sock.onopen = function() {
         if(debug) {
-            //console.log("Connected to " + wsuri);
+            console.log("Connected to " + wsuri);
         }
         connected = true;
-        if(disable_authentication === false) {
+        if(disable_authentication === false && (typeof(TESTING) === 'undefined' || TESTING === false)) {
+            console.log("Authenticating");
             authenticateTwistedDjango(return_obj);
         } else {
             for(var i = 0; i < init_funcs.length; i++) {
@@ -139,6 +145,9 @@ sock = function(debug, wsuri, disable_authentication) {
             return connected;
         },
         'onready': function(func) {                                                                                                                                                                                     
+            if(debug) {
+                console.log('adding initializer: ', func.name);
+            }   
             if(ready === true) {
                 func();
             } else {
@@ -147,7 +156,7 @@ sock = function(debug, wsuri, disable_authentication) {
         },
         'on': function(key, listener, once) {
             if(debug) {
-                //console.log('adding listener key: ', key, ",);
+                console.log('adding listener key: ', key);
             }   
             if(typeof(listeners) == 'undefined'){
                 listeners = {}; 
@@ -167,6 +176,12 @@ sock = function(debug, wsuri, disable_authentication) {
     };
     if(typeof(TESTING) !== 'undefined' && TESTING === true) {
         return_obj.sock = sock;
+        $(document).ready(function() {
+            if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+                sock.sock.onopen();
+            }
+        });
     }
     return return_obj;
 }(true);
+
