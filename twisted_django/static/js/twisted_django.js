@@ -205,4 +205,5 @@ function start_server() {
         //sock = function(wsuri, debug, disable_authentication, testing) {
         sock = sock(wsuri, true, true, true);
     }
-}();
+}
+start_server();
