@@ -9,7 +9,7 @@ sock = function(debug, wsuri, disable_authentication) {
         sock.close();
     }
     $(window).on('beforeunload', close_websocket);
-    var sock;
+    var sock = {};
     var listeners = {};
     var init_funcs = [];
     var connected = false;
@@ -24,13 +24,20 @@ sock = function(debug, wsuri, disable_authentication) {
     ellog = document.getElementById('log');
     wsuri = "ws://" + window.location.hostname + ":31415";
 
-    if ("MozWebSocket" in window) {
+    if ("MozWebSocket" in window && typeof(TESTING) !== 'undefined' && TESTING === false) {
         sock = new MozWebSocket(wsuri);
-    } else {
+    } else if(typeof(TESTING) !== 'undefined' && TESTING === false) {
         sock = new WebSocket(wsuri);
         if(debug) {
             //console.log("WS-URI", wsuri);
             //console.log("SOCK AFTER CONNECT: " + sock);
+        }
+    } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+        sock.send = function(msg) {
+            if(typeof(testing_send_queue) === 'undefined') {
+                testing_send_queue = [];
+            }
+            testing_send_queue.append(msg);
         }
     }
 
@@ -64,6 +71,7 @@ sock = function(debug, wsuri, disable_authentication) {
 
     sock.onmessage = function(e) {
         response = JSON.parse(e.data);
+        console.log(e.data);
         var value = null;
         var spent_commands = new Array();
         for(var key in response) {
@@ -139,7 +147,7 @@ sock = function(debug, wsuri, disable_authentication) {
         },
         'on': function(key, listener, once) {
             if(debug) {
-                //console.log('adding listener: ', key);
+                //console.log('adding listener key: ', key, ",);
             }   
             if(typeof(listeners) == 'undefined'){
                 listeners = {}; 
@@ -157,5 +165,8 @@ sock = function(debug, wsuri, disable_authentication) {
             sock.send(msg);
         }
     };
+    if(typeof(TESTING) !== 'undefined' && TESTING === true) {
+        return_obj.sock = sock;
+    }
     return return_obj;
 }(true);
