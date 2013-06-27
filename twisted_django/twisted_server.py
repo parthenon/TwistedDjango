@@ -2,7 +2,10 @@ import json
 import logging
 import os
 import sys
+import datetime
 from options import get_options, get_empty_options
+
+from django.utils import timezone
 
 if '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
@@ -55,7 +58,7 @@ DEBUG = True
 
 logging.basicConfig()
 
-AUTHENTICATION_FAILURE = None
+AUTHENTICATION_FAILURE = 3000
 
 
 def printerror(msg):
@@ -243,12 +246,19 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.factory.unregister(self)
 
     def update_session(self, key, value):
-        return True
         self.session[key] = value
         d = deferToThread(Session.objects.save,
                           self.session_id,
                           self.session,
-                          self.session_inst.expire_date)
+                          timezone.make_aware(datetime.datetime(2037, 1, 1, 0, 0),
+                          timezone.get_default_timezone()))
+
+        def cb(s):
+            cprint(s, 'cyan')
+            cprint(s.get_decoded(), 'cyan')
+            s.save()
+
+        d.addCallback(cb)
         d.addErrback(generic_deferred_errback, message='Update Session')
 
     def remove_from_session(self, key):
