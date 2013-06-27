@@ -303,17 +303,25 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         client.user_number = self.client_count
 
     def unregister(self, client):
+        other_users = []
+        for conf_id, conn_list in self.conn_state['conferences'].items():
+            if client in conn_list:
+                self.conn_state['conferences'][conf_id].remove(client)
+                other_users = self.conn_state['conferences'][conf_id]
+
+        if client.session is not None:
+            connection_closed = {
+                'connection_closed': {
+                    'name': client.session.get('name', ''),
+                    'user_number': client.user_number,
+                }
+            }
+        self.send_to_subset(other_users, json.dumps(connection_closed))
+
         if client in self.clients:
             del self.clients[client]
         if client in self.conn_state:
             del self.conn_state[client]
-
-        for conf_id, conn_list in self.conn_state['conferences'].items():
-            for conn in conn_list:
-                print "Found conn {0}".format(conn)
-                if conn is client:
-                    print "Removing client {1} from {0}".format(conf_id, client)
-                    self.conn_state['conferences'][conf_id].remove(conn)
 
     def broadcast(self, msg):
         if type(msg) == dict:

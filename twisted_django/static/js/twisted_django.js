@@ -158,7 +158,7 @@ sock = function(wsuri, debug, disable_authentication, testing) {
         },
         'onready': function(func) {                                                                                                                                                                                     
             if(debug) {
-                console.log('adding initializer: ', func.name);
+                //console.log('adding initializer: ', func.name);
             }   
             if(ready === true) {
                 func();
@@ -168,7 +168,7 @@ sock = function(wsuri, debug, disable_authentication, testing) {
         },
         'on': function(key, listener, once) {
             if(debug) {
-                console.log('adding listener key: ', key);
+                //console.log('adding listener key: ', key);
             }   
             if(typeof(listeners) == 'undefined'){
                 listeners = {}; 
@@ -187,11 +187,11 @@ sock = function(wsuri, debug, disable_authentication, testing) {
         }
     };
     if(testing === true) {
+        console.log(return_obj);
         return_obj.sock = sock;
+        console.log(return_obj);
         $(document).ready(function() {
-            if(testing === true) {
-                sock.sock.onopen();
-            }
+            sock.onopen();
         });
     }
     return return_obj;
