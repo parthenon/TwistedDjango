@@ -284,6 +284,18 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
     def set_state(self, key, value):
         self._local_state[key] = value
 
+    def begin_testing(self):
+        self.sendMessage = self.test_send
+        self.message_buffer = []
+
+    def test_send(self, payload, binary=False, payload_frag_size=None, sync=False):
+        self.message_buffer.append(json.dumps({
+            'binary': binary,
+            'payload_frag_size': payload_frag_size,
+            'payload': payload,
+            'sync': sync,
+        }))
+
 
 class DjangoWSServerFactory(WebSocketServerFactory):
     """
