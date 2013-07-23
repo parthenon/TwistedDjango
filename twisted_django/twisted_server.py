@@ -7,7 +7,11 @@ from options import get_options, get_empty_options
 
 from django.utils import timezone
 
-if '-f' in sys.argv or '--path' in sys.argv:
+if 'TWISTED_TESTING' in os.environ:
+    sys.path.extend(os.environ['TESTING_PATH'].split(os.pathsep))
+    os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
+    import settings
+elif '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
     sys.path.insert(0, options.path)
     os.environ['PYTHONPATH'] = options.path
