@@ -421,9 +421,8 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
 
 def run_server(commands):
-    if options is None:
-        port = '31415'
-    elif options.debug:
+    port = '31415'
+    if options is not None and options.debug:
         port = options.port
         log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
         debug = True
