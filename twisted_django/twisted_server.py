@@ -1,4 +1,5 @@
 import json
+
 import logging
 import os
 import sys
@@ -10,6 +11,7 @@ from django.utils import timezone
 if 'TWISTED_TESTING' in os.environ:
     sys.path.extend(os.environ['TESTING_PATH'].split(os.pathsep))
     os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
+    options = None
     import settings
 elif '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
@@ -46,6 +48,7 @@ from django.db import models
 #--------------- twisted server imports---------------#
 from twisted.internet.threads import deferToThread
 from twisted.internet import reactor, task
+from twisted.internet.defer import Deferred
 from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
                                 listenWS,
@@ -78,7 +81,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         authenticating the user.
     """
     def onOpen(self):
-        cprint('Initializing Protocol...', 'green')
         self.factory.register(self)
         self.default_command = None
         self.commands = self.factory.commands
@@ -103,6 +105,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             self.default_command = self.commands.pop('default')
         except KeyError:
             pass
+        self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
         close_handler = self.commands.get('onClose', None)
@@ -132,18 +135,17 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         message = None
         cprint(msg, 'green')
         self.logger.debug(msg)
-
         try:
             self.logger.debug('Loading JSON')
             message = json.loads(msg)
-
         except ValueError:
             self.logger.debug('Error loading json.')
             if self.default_command:
                 self.default_command(msg, binary)
         if not message:
             return
-        self.process_message(message, binary)
+
+        return self.process_message(message, binary)
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
@@ -162,6 +164,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         """
         errors = {}
         unimplemented = []
+        test_output = []
         self.logger.debug(msg)
         for command, val in msg.items():
             function = self.commands.get(command, None)
@@ -169,10 +172,13 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.current_command = command
                 try:
                     if PRINT_MESSAGES is True:
-                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4, sort_keys=True)), 'blue')
+                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4,
+                            sort_keys=True)), 'blue')
                     r = function(val, self, binary=binary)
-                    if r:
+                    if not isinstance(r, Deferred):
                         r.distribute(self.current_command, self)
+                    else:
+                        test_output.append(r)
                 except ClientError as e:
                     self.logger.error(e)
                     errors.update({command: e.message})
@@ -185,6 +191,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             errors.update(unimplemented=unimplemented)
         if len(errors) > 0:
             self.sendMessage(json.dumps({'errors': errors}))
+        if len(test_output) != 0:
+            return test_output
 
     def get_connection_state(self):
         state = self.conn_state[self.current_command]
@@ -287,14 +295,18 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
     def begin_testing(self):
         self.sendMessage = self.test_send
         self.message_buffer = []
+        self.deferreds = {}
+        self.session = {
+            'testing': True
+        }
 
     def test_send(self, payload, binary=False, payload_frag_size=None, sync=False):
-        self.message_buffer.append(json.dumps({
+        self.message_buffer.append({
             'binary': binary,
             'payload_frag_size': payload_frag_size,
             'payload': payload,
             'sync': sync,
-        }))
+        })
 
 
 class DjangoWSServerFactory(WebSocketServerFactory):
@@ -305,10 +317,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
         self.load_commands(commands)
-        cprint('Modules: {}'.format(self.command_modules_init), 'yellow')
-        cprint('Commands: {}'.format(self.commands), 'yellow')
-        cprint('Initializing Protocol...', 'green')
-        cprint('{}'.format(settings.TWISTED_STUFF), 'red')
 
         WebSocketServerFactory.__init__(self, url, debug=debug, debugCodePaths=debugCodePaths)
 
@@ -413,22 +421,25 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
 
 def run_server(commands):
-    if options.debug:
+    if options is None:
+        port = '31415'
+    elif options.debug:
+        port = options.port
         log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
         debug = True
     else:
         debug = False
     debug = True
 
-    factory = DjangoWSServerFactory("ws://localhost:" + options.port,
+    factory = DjangoWSServerFactory("ws://localhost:" + port,
                                     commands=commands,
                                     debug=debug,
                                     debugCodePaths=debug)
     cprint('Created factory: {}'.format(factory), 'green')
-
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
-    listenWS(factory)
-    cprint('Listening...', 'green')
 
-    reactor.run()
+    if 'TWISTED_TESTING' not in os.environ:
+        listenWS(factory)
+        cprint('Listening...', 'green')
+        reactor.run()
