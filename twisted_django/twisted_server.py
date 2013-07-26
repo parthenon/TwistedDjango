@@ -105,7 +105,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             self.default_command = self.commands.pop('default')
         except KeyError:
             pass
-        self.begin_testing()
+        if 'TWISTED_TESTING' in os.environ:
+            self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
         close_handler = self.commands.get('onClose', None)
@@ -173,9 +174,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 try:
                     if PRINT_MESSAGES is True:
                         cprint('processing django command: {0}'.format(json.dumps(msg, indent=4,
-                            sort_keys=True)), 'blue')
+                               sort_keys=True)), 'blue')
                     r = function(val, self, binary=binary)
-                    if not isinstance(r, Deferred):
+                    if r is not None and not isinstance(r, Deferred):
                         r.distribute(self.current_command, self)
                     else:
                         test_output.append(r)
