@@ -13,6 +13,7 @@ def init_twisted_module(func):
 
 
 def twisted_command(run_once=False):
+
     def dec(func):
         (required_args, func_varargs, func_keywords, func_defaults) = getargspec(func)
         try:

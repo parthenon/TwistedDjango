@@ -330,6 +330,10 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         for module in self.command_modules_init:
             module(self)
 
+        keys = sorted(self.commands.keys())
+        for com in keys:
+            cprint("\t{}: {}".format(com, self.commands.get(com)), 'yellow')
+
     def register(self, client):
         self.client_count += 1
         self.clients.update({client: self.client_count})
@@ -434,7 +438,7 @@ def run_server(commands):
                                     commands=commands,
                                     debug=debug,
                                     debugCodePaths=debug)
-    cprint('Created factory: {}'.format(factory), 'green')
+
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
 
