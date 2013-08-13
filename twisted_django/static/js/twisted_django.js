@@ -89,7 +89,6 @@ sock = function(wsuri, debug, disable_authentication, testing) {
 
     sock.onmessage = function(e) {
         response = JSON.parse(e.data);
-        console.log(e.data);
         var value = null;
         var spent_commands = new Array();
         for(var key in response) {

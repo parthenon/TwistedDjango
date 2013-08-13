@@ -138,7 +138,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 This is assumed to be json.  If it's not a default function will be run.
         """
         message = None
-        cprint(msg, 'green')
         self.logger.debug(msg)
         try:
             self.logger.debug('Loading JSON')
