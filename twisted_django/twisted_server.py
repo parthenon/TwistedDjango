@@ -90,6 +90,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_inst = None
         self.user = None
         self.logger = logging.getLogger(__name__)
+        self.teardown = self.factory.protocol_teardown
 
         if settings.DEBUG:
             self.logger.setLevel(logging.DEBUG)
@@ -119,6 +120,9 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         else:
             user_id = None
         self.factory.unregister(self)
+
+        for func in self.protocol_teardown:
+            func(self)
 
         message = {
             'user_id': user_id,
@@ -314,6 +318,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     """
     """
     command_modules_init = []
+    protocol_teardown = []
     commands = {}
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
@@ -343,19 +348,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def unregister(self, client):
         other_users = []
-        for conf_id, conn_list in self.conn_state['conferences'].items():
-            if client in conn_list:
-                self.conn_state['conferences'][conf_id].remove(client)
-                other_users = self.conn_state['conferences'][conf_id]
-
-        if client.session is not None:
-            connection_closed = {
-                'connection_closed': {
-                    'name': client.session.get('name', ''),
-                    'user_number': client.user_number,
-                }
-            }
-        self.send_to_subset(other_users, json.dumps(connection_closed))
 
         if client in self.clients:
             del self.clients[client]
@@ -423,6 +415,11 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     @classmethod
     def register_command_module(cls, init_func):
         cls.command_modules_init.append(init_func)
+
+    @classmethod
+    def register_teardown_function(cls, func):
+        protocol_teardown.append(func)
+
 
 
 def run_server(commands):
