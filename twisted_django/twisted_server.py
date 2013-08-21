@@ -267,6 +267,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
     def update_session(self, key, value):
         self.session[key] = value
+        cprint(self.session, 'cyan')
+        cprint(type(self.session), 'cyan')
         d = deferToThread(Session.objects.save,
                           self.session_id,
                           self.session,

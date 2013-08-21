@@ -1,6 +1,5 @@
 url_split = document.URL.split('/');
-//conf_id = url_split[url_split.length - 1];
-conf_id = '1';
+conf_id = url_split[url_split.length - 1];
 // twisted_django_server/twisted_django.js
 
 // wsuri: This is where you're going to connect
@@ -104,6 +103,7 @@ sock = function(wsuri, debug, disable_authentication, testing) {
                     }
                     user_name = response[key]['name'];
                     permissions = response[key]['permissions'];
+                    user_number = response[key]['user_number'];
                     for(var i = 0; i < init_funcs.length; i++) {
                         init_funcs[i]();
                     }
