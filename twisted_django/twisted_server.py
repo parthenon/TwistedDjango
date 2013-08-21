@@ -131,6 +131,10 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
         close_handler(message, self)
 
+    def connectionLost(self, reason):
+        WebSocketServerProtocol.connectionLost(self, reason)
+        self.factory.unregister(self)
+
     def onMessage(self, msg, binary):
         """
             Process a message from the client.
@@ -151,9 +155,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
         return self.process_message(message, binary)
 
-    def connectionLost(self, reason):
-        WebSocketServerProtocol.connectionLost(self, reason)
-        self.factory.unregister(self)
 
     def process_event(self, msg, binary, *args, **kwargs):
         pass
@@ -346,8 +347,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         client.user_number = self.client_count
 
     def unregister(self, client):
-        other_users = []
-
         if client in self.clients:
             del self.clients[client]
         if client in self.conn_state:

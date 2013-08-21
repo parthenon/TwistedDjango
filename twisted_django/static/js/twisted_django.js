@@ -1,5 +1,6 @@
 url_split = document.URL.split('/');
-conf_id = url_split[url_split.length - 1];
+//conf_id = url_split[url_split.length - 1];
+conf_id = '1';
 // twisted_django_server/twisted_django.js
 
 // wsuri: This is where you're going to connect
@@ -107,9 +108,12 @@ sock = function(wsuri, debug, disable_authentication, testing) {
                         init_funcs[i]();
                     }
                 } else {
-                    if(response['loginUrl'] !== undefined) {
-                        loginUrl = response['loginUrl'];
-                        window.location.href = loginUrl
+                    console.log('redirecting page to login screen');
+                    console.log('response: ', response);
+                    console.log('login url: ', response['authenticate']['login_url']);
+                    if(response['authenticate']['login_url'] !== undefined) {
+                        login_url = response['authenticate']['login_url'];
+                        window.location.href = login_url
                     }
                 }
                 return
