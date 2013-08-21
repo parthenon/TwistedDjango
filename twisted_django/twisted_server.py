@@ -130,10 +130,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         }
 
         close_handler(message, self)
+        for teardown_func in self.factory.protocol_teardown:
+            teardown_func(self)
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
         self.factory.unregister(self)
+        for teardown_func in self.factory.protocol_teardown:
+            teardown_func(self)
 
     def onMessage(self, msg, binary):
         """
@@ -154,7 +158,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             return
 
         return self.process_message(message, binary)
-
 
     def process_event(self, msg, binary, *args, **kwargs):
         pass
@@ -416,7 +419,8 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     @classmethod
     def register_teardown_function(cls, func):
-        protocol_teardown.append(func)
+        cprint(func, 'cyan')
+        cls.protocol_teardown.append(func)
 
 
 

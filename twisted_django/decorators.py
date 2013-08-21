@@ -18,7 +18,6 @@ def protocol_teardown_function(func):
         return func(protocol, *args, **kwargs)
     return wrapper
 
-
 def twisted_command(run_once=False):
 
     def dec(func):
