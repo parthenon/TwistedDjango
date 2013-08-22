@@ -225,7 +225,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_id = kwargs.pop('session_id', None)
         self.logger.debug('Entering confirm_session session_id:%s' % self.session_id)
         if not self.session or isinstance(self.session, models.Model):
-            cprint('Loading session', 'red')
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
@@ -267,13 +266,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
     def update_session(self, key, value):
         self.session[key] = value
-        cprint(self.session, 'cyan')
-        cprint(type(self.session), 'cyan')
-        d = deferToThread(Session.objects.save,
-                          self.session_id,
-                          self.session,
-                          timezone.make_aware(datetime.datetime(2037, 1, 1, 0, 0),
-                          timezone.get_default_timezone()))
+        d = deferToThread(self.save_session)
 
         def cb(s):
             cprint(s, 'cyan')
@@ -282,6 +275,11 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
         d.addCallback(cb)
         d.addErrback(generic_deferred_errback, message='Update Session')
+
+    def save_session(self):
+        Session.objects.save(self.session_id, self.session,
+                             timezone.make_aware(datetime.datetime(2037, 1, 1, 0, 0),
+                             timezone.get_default_timezone()))
 
     def remove_from_session(self, key):
         del self.session[key]
@@ -335,6 +333,14 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         self.clients = {}
         self.client_count = 0
 
+        #Session id's will be an easy way to keep track of users that return to the page
+        #The user number needs to remain the same if a user comes back to avoid duplicate
+        #information being sent.
+        #format = {
+        #    <session_id>: <user_number>,
+        #}
+        self.session_ids = {}
+
         #This is the global state for all connections.
         self.conn_state = {}
 
@@ -344,6 +350,18 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         keys = sorted(self.commands.keys())
         for com in keys:
             cprint("\t{}: {}".format(com, self.commands.get(com)), 'yellow')
+
+    def register_session_id(self, connection, session_id):
+        """
+            This happens after authentication has been started by the client
+        """
+        if session_id in self.session_ids:
+            user_number = self.session_ids[session_id]
+            connection.user_number = user_number
+            self.clients[connection] = user_number
+        else:
+            self.session_ids[session_id] = connection.user_number
+            return
 
     def register(self, client):
         self.client_count += 1
