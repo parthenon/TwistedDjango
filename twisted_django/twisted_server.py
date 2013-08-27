@@ -1,10 +1,19 @@
 import json
+
 import logging
 import os
 import sys
+import datetime
 from options import get_options, get_empty_options
 
-if '-f' in sys.argv or '--path' in sys.argv:
+from django.utils import timezone
+
+if 'TWISTED_TESTING' in os.environ:
+    sys.path.extend(os.environ['TESTING_PATH'].split(os.pathsep))
+    os.environ["DJANGO_SETTINGS_MODULE"] = "settings"
+    options = None
+    import settings
+elif '-f' in sys.argv or '--path' in sys.argv:
     (options, args) = get_options()
     sys.path.insert(0, options.path)
     os.environ['PYTHONPATH'] = options.path
@@ -39,6 +48,7 @@ from django.db import models
 #--------------- twisted server imports---------------#
 from twisted.internet.threads import deferToThread
 from twisted.internet import reactor, task
+from twisted.internet.defer import Deferred
 from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
                                 listenWS,
@@ -55,7 +65,7 @@ DEBUG = True
 
 logging.basicConfig()
 
-AUTHENTICATION_FAILURE = None
+AUTHENTICATION_FAILURE = 3000
 
 
 def printerror(msg):
@@ -71,7 +81,6 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         authenticating the user.
     """
     def onOpen(self):
-        cprint('Initializing Protocol...', 'green')
         self.factory.register(self)
         self.default_command = None
         self.commands = self.factory.commands
@@ -96,6 +105,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             self.default_command = self.commands.pop('default')
         except KeyError:
             pass
+        if 'TWISTED_TESTING' in os.environ:
+            self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
         try:
@@ -110,6 +121,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             user_id = self.user.pk
         else:
             user_id = None
+        self.factory.unregister(self)
 
         message = {
             'user_id': user_id,
@@ -127,27 +139,17 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         message = None
         cprint(msg, 'green')
         self.logger.debug(msg)
-
         try:
             self.logger.debug('Loading JSON')
             message = json.loads(msg)
-
         except ValueError:
             self.logger.debug('Error loading json.')
             if self.default_command:
                 self.default_command(msg, binary)
         if not message:
             return
-        if 'authenticate' in message:
-            self.logger.debug('authenticating')
-            auth = message.pop('authenticate')
-            self.logger.debug(auth)
-            d = deferToThread(self.confirm_session, session_id=auth)
-            d.addCallback(self.session_success)
-            d.addErrback(self.session_error)
-            return
 
-        self.process_message(message, binary)
+        return self.process_message(message, binary)
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
@@ -166,6 +168,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         """
         errors = {}
         unimplemented = []
+        test_output = []
         self.logger.debug(msg)
         for command, val in msg.items():
             function = self.commands.get(command, None)
@@ -173,10 +176,13 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 self.current_command = command
                 try:
                     if PRINT_MESSAGES is True:
-                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4, sort_keys=True)), 'blue')
+                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4,
+                               sort_keys=True)), 'blue')
                     r = function(val, self, binary=binary)
-                    if r:
+                    if r is not None and not isinstance(r, Deferred):
                         r.distribute(self.current_command, self)
+                    else:
+                        test_output.append(r)
                 except ClientError as e:
                     self.logger.error(e)
                     errors.update({command: e.message})
@@ -189,6 +195,8 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             errors.update(unimplemented=unimplemented)
         if len(errors) > 0:
             self.sendMessage(json.dumps({'errors': errors}))
+        if len(test_output) != 0:
+            return test_output
 
     def get_connection_state(self):
         state = self.conn_state[self.current_command]
@@ -213,12 +221,14 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_id = kwargs.pop('session_id', None)
         self.logger.debug('Entering confirm_session session_id:%s' % self.session_id)
         if not self.session or isinstance(self.session, models.Model):
+            cprint('Loading session', 'red')
             try:
                 session = Session.objects.get(pk=self.session_id)
                 uid = session.get_decoded().get('_auth_user_id')
                 user = User.objects.get(pk=uid)
                 self.logger.debug(user.username)
-                self.session = session
+                self.session = session.get_decoded()
+                cprint('session: {}'.format(self.session), 'red')
                 self.user = user
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
@@ -252,12 +262,19 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.factory.unregister(self)
 
     def update_session(self, key, value):
-        return True
         self.session[key] = value
         d = deferToThread(Session.objects.save,
                           self.session_id,
                           self.session,
-                          self.session_inst.expire_date)
+                          timezone.make_aware(datetime.datetime(2037, 1, 1, 0, 0),
+                          timezone.get_default_timezone()))
+
+        def cb(s):
+            cprint(s, 'cyan')
+            cprint(s.get_decoded(), 'cyan')
+            s.save()
+
+        d.addCallback(cb)
         d.addErrback(generic_deferred_errback, message='Update Session')
 
     def remove_from_session(self, key):
@@ -278,6 +295,22 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
 
     def set_state(self, key, value):
         self._local_state[key] = value
+
+    def begin_testing(self):
+        self.sendMessage = self.test_send
+        self.message_buffer = []
+        self.deferreds = {}
+        self.session = {
+            'testing': True
+        }
+
+    def test_send(self, payload, binary=False, payload_frag_size=None, sync=False):
+        self.message_buffer.append({
+            'binary': binary,
+            'payload_frag_size': payload_frag_size,
+            'payload': payload,
+            'sync': sync,
+        })
 
 
 class DjangoWSServerFactory(WebSocketServerFactory):
@@ -305,6 +338,10 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         for module in self.command_modules_init:
             module(self)
 
+        keys = sorted(self.commands.keys())
+        for com in keys:
+            cprint("\t{}: {}".format(com, self.commands.get(com)), 'yellow')
+
     def register(self, client):
         self.client_count += 1
         self.clients.update({client: self.client_count})
@@ -312,16 +349,25 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         client.user_number = self.client_count
 
     def unregister(self, client):
-        return
+        other_users = []
+        for conf_id, conn_list in self.conn_state['conferences'].items():
+            if client in conn_list:
+                self.conn_state['conferences'][conf_id].remove(client)
+                other_users = self.conn_state['conferences'][conf_id]
+
+        if client.session is not None:
+            connection_closed = {
+                'connection_closed': {
+                    'name': client.session.get('name', ''),
+                    'user_number': client.user_number,
+                }
+            }
+        self.send_to_subset(other_users, json.dumps(connection_closed))
+
         if client in self.clients:
             del self.clients[client]
         if client in self.conn_state:
             del self.conn_state[client]
-
-        for conf_id, conn_list in self.conn_state['conferences'].items():
-            for conn in conn_list:
-                if conn is client:
-                    self.conn_state['conferences'][conf_id].remove(conn)
 
     def broadcast(self, msg):
         if type(msg) == dict:
@@ -330,7 +376,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
             c.sendMessage(msg)
 
     def send_to_subset(self, clients, msg):
-        msg = json.dumps(json.loads(msg), indent=4, sort_keys=True)
+        msg = json.dumps(json.loads(msg))
         if DEBUG:
             cprint('Sending to browser: {0}'.format(msg), 'yellow')
         for client in clients:
@@ -363,14 +409,19 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     def update_global_state(self, state):
         self.conn_state.update(state)
 
+    def get_client_by_number(self, client_number):
+        for client, number in self.clients.items():
+            if number == client_number:
+                return client
+
     @classmethod
     def register_command(cls, key, func, run_once=False):
         if key in cls.commands:
-            cls.commands[key].update({func: run_once})
+            cls.commands[key] = func
             if not isinstance(key, str) or not isfunction(func):
                 raise ValueError(u'All server commands must be string:function pairs.')
         else:
-            cls.commands[key] = {func: run_once}
+            cls.commands[key] = func
 
     @classmethod
     def remove_command(cls, key, func, run_once=False):
@@ -382,7 +433,9 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
 
 def run_server(commands, sslcontext = None):
-    if options.debug:
+    port = '31415'
+    if options is not None and options.debug:
+        port = options.port
         log.startLogging(open('/var/log/autobahn_chat.log', 'w'))
         debug = True
     else:
@@ -390,12 +443,12 @@ def run_server(commands, sslcontext = None):
     debug = True
 
     if sslcontext is not None:
-        factory = DjangoWSServerFactory("wss://localhost:" + options.port,
+        factory = DjangoWSServerFactory("wss://localhost:" + port,
                                         commands=commands,
                                         debug=debug,
                                         debugCodePaths=debug)
     else:
-        factory = DjangoWSServerFactory("ws://localhost:" + options.port,
+        factory = DjangoWSServerFactory("ws://localhost:" + port,
                                         commands=commands,
                                         debug=debug,
                                         debugCodePaths=debug)
@@ -404,11 +457,11 @@ def run_server(commands, sslcontext = None):
 
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
-    if sslcontext is not None:
-        listenWS(factory, sslcontext)
-    else:
-        listenWS(factory)
-
-    cprint('Listening...', 'green')
-
-    reactor.run()
+    if 'TWISTED_TESTING' not in os.environ:
+        cprint('Listening...', 'green')
+        if sslcontext is not None:
+            listenWS(factory, sslcontext)
+            reactor.run()
+        else:
+            listenWS(factory)
+            reactor.run()

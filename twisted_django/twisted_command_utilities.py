@@ -19,7 +19,7 @@ def who_am_i():
 
 
 def generic_deferred_errback(error, *args, **kwargs):
-    if not kwargs['message'].endswith('\n'):
+    if "message" in kwargs and not kwargs['message'].endswith('\n'):
         kwargs['message'] += '\n'
 
     m = colored(kwargs['message'], 'red', attrs=['bold'])
@@ -58,20 +58,17 @@ class CommandResponse:
             def_resp = self.deferred_response[0]
             def_resp_args = self.deferred_response[1]
         if len(self.recipients) == 0:
-            #print "No recipients: " + self.command_name + ":" + str(self.response)
             self.connection.sendMessage(json.dumps({self.command_name: self.response}))
             if self.deferred_response:
                 self.connection.sendMessage(json.dumps(def_resp(def_resp_args)))
         else:
             if self.everyone_else is True:
-                #print "Everyone else: " + self.command_name + ":" + str(self.response)
                 recipients = filter(lambda a: a != self.connection, self.recipients)
                 self.connection.factory.send_to_subset(
                     recipients,
                     json.dumps({self.command_name: self.response})
                     )
             else:
-                #print "Subset: " + self.command_name + ":" + str(self.response)
                 self.connection.factory.send_to_subset(
                     self.recipients,
                     json.dumps({self.command_name: self.response}))
