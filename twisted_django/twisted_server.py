@@ -228,7 +228,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
                 user = User.objects.get(pk=uid)
                 self.logger.debug(user.username)
                 self.session = session.get_decoded()
-                cprint('session: {}'.format(self.session), 'red')
+                cprint('session: {0}'.format(self.session), 'red')
                 self.user = user
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
@@ -340,7 +340,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
         keys = sorted(self.commands.keys())
         for com in keys:
-            cprint("\t{}: {}".format(com, self.commands.get(com)), 'yellow')
+            cprint("\t{0}: {0}".format(com, self.commands.get(com)), 'yellow')
 
     def register(self, client):
         self.client_count += 1
