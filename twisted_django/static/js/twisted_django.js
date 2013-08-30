@@ -8,7 +8,7 @@ conf_id = url_split[url_split.length - 1];
 // testing: This will make the actual websocket available.  The websocket is normally locked away
 //          inside the closure
 
-sock = function(wsuri, debug, disable_authentication, testing) {
+twistedsock = function(wsuri, debug, disable_authentication, testing, close_function) {
     if(typeof(disable_authentication) === 'undefined') {
         disable_authentication = false;
     }
@@ -28,6 +28,11 @@ sock = function(wsuri, debug, disable_authentication, testing) {
     var connected = false;
     var authenticated = false;
     var ready = false;
+    var close_func = false;
+
+    if (typeof(close_function) !== 'undefined') {
+        close_func = close_function;
+    }
 
     if(typeof(disable_authentication) === 'undefined') {
         disable_authentication = false;
@@ -85,11 +90,13 @@ sock = function(wsuri, debug, disable_authentication, testing) {
         connected = false;
         authenticated = false;
         ready = false;
+        listeners = {};
+        if (close_func !== false)
+            close_func(e);
     }
 
     sock.onmessage = function(e) {
         response = JSON.parse(e.data);
-        console.log(e.data);
         var value = null;
         var spent_commands = new Array();
         for(var key in response) {
@@ -184,26 +191,21 @@ sock = function(wsuri, debug, disable_authentication, testing) {
         'send': function(msg) {
             //console.log('sending: ', msg);
             sock.send(msg);
+        },
+        'onclose': function(func) {
+            close_func = func;
         }
     };
-    if(testing === true) {
-        console.log(return_obj);
-        return_obj.sock = sock;
-        console.log(return_obj);
-        $(document).ready(function() {
-            sock.onopen();
-        });
-    }
     return return_obj;
 };
 
-function start_server() {
-    wsuri = "ws://" + window.location.hostname + ":31415";
-    if(typeof(TESTING) === 'undefined' || TESTING === false) {
-        sock = sock(wsuri, true, false, false);
-    } else if(typeof(TESTING) !== 'undefined' && TESTING === true) {
-        //sock = function(wsuri, debug, disable_authentication, testing) {
-        sock = sock(wsuri, true, true, true);
+function start_server(wsuri, close_function, debug) {
+    if (typeof(wsuri) == "undefined") {
+        wsuri = "ws://" + window.location.hostname + ":31415";
+    }
+    if(typeof(debug) === 'undefined' || debug == false) {
+        sock = twistedsock(wsuri, false, false, false, close_function);
+    } else if(debug === true) {
+        sock = twistedsock(wsuri, true, true, false, close_function);
     }
 }
-start_server();
