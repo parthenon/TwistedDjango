@@ -199,17 +199,17 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
     return return_obj;
 };
 
-function start_server(wsuri, use_authentication, close_function, debug) {
+function start_server(wsuri, close_function, disable_authentication, debug) {
     if (typeof(wsuri) == "undefined") {
         wsuri = "ws://" + window.location.hostname + ":31415";
     }
-    if (typeof(use_authentication) == "undefined") {
-        use_authentication = true;
+    if (typeof(disable_authentication) == "undefined") {
+        disable_authentication = false;
     }
     if(typeof(debug) === 'undefined' || debug == false) {
-        var sock = twistedsock(wsuri, false, use_authentication, false, close_function);
+        var sock = twistedsock(wsuri, false, disable_authentication, false, close_function);
     } else if(debug === true) {
-        var sock = twistedsock(wsuri, true, use_authentication, false, close_function);
+        var sock = twistedsock(wsuri, true, disable_authentication, false, close_function);
     }
 
     return sock;
