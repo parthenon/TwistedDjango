@@ -29,6 +29,7 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
     var authenticated = false;
     var ready = false;
     var close_func = false;
+    var auth_info = {};
 
     if (typeof(close_function) !== 'undefined') {
         close_func = close_function;
@@ -106,6 +107,7 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
             if(key === 'authenticate' && disable_authentication === false) {
                 if(response[key]['authenticate'] === 'success') {
                     authenticated = true;
+                    auth_info = response[key];
                     if(connected === true) {
                         ready = true;
                     }
@@ -159,6 +161,9 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
         },
         'is_authenticated': function() {
             return authenticated;
+        },
+        'auth_info': function() {
+            return auth_info;
         },
         'is_connected': function() {
             return connected;
