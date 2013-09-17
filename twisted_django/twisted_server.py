@@ -350,10 +350,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def unregister(self, client):
         other_users = []
-        for conf_id, conn_list in self.conn_state['conferences'].items():
-            if client in conn_list:
-                self.conn_state['conferences'][conf_id].remove(client)
-                other_users = self.conn_state['conferences'][conf_id]
 
         if client.session is not None:
             connection_closed = {
