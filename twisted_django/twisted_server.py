@@ -90,6 +90,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.session_inst = None
         self.user = None
         self.logger = logging.getLogger(__name__)
+        self.teardown = self.factory.protocol_teardown
 
         if settings.DEBUG:
             self.logger.setLevel(logging.DEBUG)
@@ -123,12 +124,24 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             user_id = None
         self.factory.unregister(self)
 
+        for func in self.protocol_teardown:
+            func(self)
+        self.factory.unregister(self)
+
         message = {
             'user_id': user_id,
             'type': self.get_state('type')
         }
 
         close_handler(message, self)
+        for teardown_func in self.factory.protocol_teardown:
+            teardown_func(self)
+
+    def connectionLost(self, reason):
+        WebSocketServerProtocol.connectionLost(self, reason)
+        self.factory.unregister(self)
+        for teardown_func in self.factory.protocol_teardown:
+            teardown_func(self)
 
     def onMessage(self, msg, binary):
         """
@@ -317,6 +330,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     """
     """
     command_modules_init = []
+    protocol_teardown = []
     commands = {}
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
@@ -426,6 +440,11 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     @classmethod
     def register_command_module(cls, init_func):
         cls.command_modules_init.append(init_func)
+
+    @classmethod
+    def register_teardown_function(cls, func):
+        cprint(func, 'cyan')
+        cls.protocol_teardown.append(func)
 
 
 def run_server(commands, sslcontext = None):
