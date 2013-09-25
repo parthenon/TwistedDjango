@@ -11,6 +11,12 @@ def init_twisted_module(func):
         return func(factory, *args, **kwargs)
     return wrapper
 
+def protocol_teardown_function(func):
+    DjangoWSServerFactory.register_teardown_function(func)
+
+    def wrapper(protocol, *args, **kwargs):
+        return func(protocol, *args, **kwargs)
+    return wrapper
 
 def protocol_teardown_function(func):
     DjangoWSServerFactory.register_teardown_function(func)
@@ -49,10 +55,6 @@ def twisted_command(run_once=False):
         return wrapper
     return dec
 
-
-def on_close(func):
-    DjangoWSServerFactory.register_event('close', func)
-    return func
 
 
 

@@ -113,13 +113,17 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
                     }
                     user_name = response[key]['name'];
                     permissions = response[key]['permissions'];
+                    user_number = response[key]['user_number'];
                     for(var i = 0; i < init_funcs.length; i++) {
                         init_funcs[i]();
                     }
                 } else {
-                    if(response['loginUrl'] !== undefined) {
-                        loginUrl = response['loginUrl'];
-                        window.location.href = loginUrl
+                    console.log('redirecting page to login screen');
+                    console.log('response: ', response);
+                    console.log('login url: ', response['authenticate']['login_url']);
+                    if(response['authenticate']['login_url'] !== undefined) {
+                        login_url = response['authenticate']['login_url'];
+                        window.location.href = login_url
                     }
                 }
                 return
