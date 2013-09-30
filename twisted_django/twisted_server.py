@@ -91,6 +91,7 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.user = None
         self.logger = logging.getLogger(__name__)
         self.teardown = self.factory.protocol_teardown
+        self.teardown_started = False
 
         if settings.DEBUG:
             self.logger.setLevel(logging.DEBUG)
@@ -110,38 +111,20 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
-        try:
-            close_handler = self.commands.get('onClose', None)
-        except AttributeError:
-            close_handler = None
-
-        if not close_handler:
-            return
-
-        if self.user:
-            user_id = self.user.pk
-        else:
-            user_id = None
-        self.factory.unregister(self)
-
-        for func in self.protocol_teardown:
-            func(self)
-        self.factory.unregister(self)
-
-        message = {
-            'user_id': user_id,
-            'type': self.get_state('type')
-        }
-
-        close_handler(message, self)
-        for teardown_func in self.factory.protocol_teardown:
-            teardown_func(self)
+        self.protocol_teardown()
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
-        self.factory.unregister(self)
-        for teardown_func in self.factory.protocol_teardown:
-            teardown_func(self)
+        self.protocol_teardown()
+
+
+    def protocol_teardown(self):
+        if not self.teardown_started:
+            self.teardown_started = True
+            self.factory.unregister(self)
+            for teardown_func in self.factory.protocol_teardown:
+                teardown_func(self)
+
 
     def onMessage(self, msg, binary):
         """
