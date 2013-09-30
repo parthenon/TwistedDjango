@@ -220,9 +220,12 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         self.conn_state.get(self.current_command).update(state)
 
     def is_authenticated(self):
-        if self.session:
-            return True
-        else:
+        try:
+            if self.session:
+                return True
+            else:
+                return False
+        except AttributeError:
             return False
 
     def confirm_session(self, *args, **kwargs):
