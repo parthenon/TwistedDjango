@@ -19,10 +19,10 @@ def who_am_i():
 
 
 def generic_deferred_errback(error, *args, **kwargs):
+    m = ''
     if "message" in kwargs and not kwargs['message'].endswith('\n'):
         kwargs['message'] += '\n'
-
-    m = colored(kwargs['message'], 'red', attrs=['bold'])
+        m = colored(kwargs['message'], 'red', attrs=['bold'])
     e = colored(error, 'red')
     print(e + m)
 
