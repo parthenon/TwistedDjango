@@ -11,12 +11,6 @@ def init_twisted_module(func):
         return func(factory, *args, **kwargs)
     return wrapper
 
-def protocol_teardown_function(func):
-    DjangoWSServerFactory.register_teardown_function(func)
-
-    def wrapper(protocol, *args, **kwargs):
-        return func(protocol, *args, **kwargs)
-    return wrapper
 
 def protocol_teardown_function(func):
     DjangoWSServerFactory.register_teardown_function(func)
