@@ -111,11 +111,13 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
             self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
-        self.protocol_teardown()
+        if hasattr(self, 'protocol_teardown'):
+            self.protocol_teardown()
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
-        self.protocol_teardown()
+        if hasattr(self, 'protocol_teardown'):
+            self.protocol_teardown()
 
     def protocol_teardown(self):
         try:
@@ -260,9 +262,10 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         d = deferToThread(self.save_session)
 
         def cb(s):
-            cprint(s, 'cyan')
-            cprint(s.get_decoded(), 'cyan')
-            s.save()
+            if s is not None and hasattr(s, 'get_decoded'):
+                cprint(s, 'cyan')
+                cprint(s.get_decoded(), 'cyan')
+                s.save()
 
         d.addCallback(cb)
         d.addErrback(generic_deferred_errback, message='Update Session')
