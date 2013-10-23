@@ -60,7 +60,7 @@ from twisted_command_utilities import (ClientError,
                                        who_called_me,
                                        generic_deferred_errback,)
 
-PRINT_MESSAGES = False
+PRINT_MESSAGES = True
 DEBUG = True
 
 logging.basicConfig()

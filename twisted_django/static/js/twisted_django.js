@@ -205,7 +205,9 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
         },
         'send': function(msg) {
             //console.log('sending: ', msg);
+            console.log("%c {0}".format(msg), 'color: #E33B3B');
             sock.send(msg);
+            console.log("%c {0}".format('command sent'), 'color: #E33B3B');
         },
         'onclose': function(func) {
             close_func = func;
