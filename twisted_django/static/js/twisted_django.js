@@ -72,9 +72,12 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
         if(disable_authentication === false && testing === false) {
             console.log("Authenticating");
             authenticateTwistedDjango(return_obj);
+            console.log('authentication function returned');
         } else {
             for(var i = 0; i < init_funcs.length; i++) {
+                console.log('running init function ' + i);
                 init_funcs[i]();
+                console.log('finished running init function ' + i);
             }
         }
     }
@@ -115,7 +118,9 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
                     permissions = response[key]['permissions'];
                     user_number = response[key]['user_number'];
                     for(var i = 0; i < init_funcs.length; i++) {
+                        console.log('running init function ' + i);
                         init_funcs[i]();
+                        console.log('finished running init function ' + i);
                     }
                 } else {
                     console.log('redirecting page to login screen');
@@ -199,7 +204,9 @@ twistedsock = function(wsuri, debug, disable_authentication, testing, close_func
         },
         'send': function(msg) {
             //console.log('sending: ', msg);
+            console.log("%c {0}".format(msg), 'color: #E33B3B');
             sock.send(msg);
+            console.log("%c {0}".format('command sent'), 'color: #E33B3B');
         },
         'onclose': function(func) {
             close_func = func;
@@ -220,6 +227,7 @@ function start_server(wsuri, close_function, disable_authentication, debug) {
     } else if(debug === true) {
         var sock = twistedsock(wsuri, true, disable_authentication, false, close_function);
     }
+
 
     return sock;
 }

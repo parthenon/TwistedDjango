@@ -7,14 +7,14 @@ function authenticateTwistedDjango(on_authentication_response) {
         async:false,
         cache:false,
         success:function(text){ 
+            console.log('ajax returned');
             session_id = text; 
             authentication_obj = {
                 'authenticate': {
                     'session_id': session_id
                 }
             };
-
-            sock.send(JSON.stringify(authentication_obj));
         }
     });
+    sock.send(JSON.stringify(authentication_obj));
 }

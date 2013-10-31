@@ -60,7 +60,7 @@ from twisted_command_utilities import (ClientError,
                                        who_called_me,
                                        generic_deferred_errback,)
 
-PRINT_MESSAGES = False
+PRINT_MESSAGES = True
 DEBUG = True
 
 logging.basicConfig()
@@ -73,56 +73,66 @@ def printerror(msg):
     cprint(errormsg, 'red')
 
 
-class DjangoWSServerProtocol(WebSocketServerProtocol):
+class DjangoWSServerProtocol(object, WebSocketServerProtocol):
     """
         This is the protocol for a general purpose asyncronous server Autobahn WebSocket server.
         It has been integrated with Django, and ca therefore access models, signals, etc.
         When a connection is established the user's Django sessionId is verified thus
         authenticating the user.
     """
-    def onOpen(self):
-        self.factory.register(self)
+    def __init__(self):
+        super(DjangoWSServerProtocol, self).__init__()
+        self.teardown_started = False
         self.default_command = None
-        self.commands = self.factory.commands
         self.deferred_responses = []
         self.session = None
         self.session_id = ''
         self.session_inst = None
         self.user = None
         self.logger = logging.getLogger(__name__)
-        self.teardown = self.factory.protocol_teardown
-        self.teardown_started = False
+        self.conn_state = {}
 
         if settings.DEBUG:
             self.logger.setLevel(logging.DEBUG)
         else:
             self.logger.setLevel(logging.ERROR)
 
-        self.conn_state = {}
+    def onOpen(self):
+        self.factory.register(self)
+        self.commands = self.factory.commands
+        self.teardown = self.factory.protocol_teardown
+
         for key, value in self.commands.items():
             self.conn_state[key] = value
+
         self.conn_state.update(connection_state={})
         self._local_state = {}
+
         try:
             self.default_command = self.commands.pop('default')
         except KeyError:
             pass
+
         if 'TWISTED_TESTING' in os.environ:
             self.begin_testing()
 
     def onClose(self, wasClean, code, reason):
-        self.protocol_teardown()
+        if hasattr(self, 'protocol_teardown'):
+            self.protocol_teardown()
 
     def connectionLost(self, reason):
         WebSocketServerProtocol.connectionLost(self, reason)
         self.protocol_teardown()
 
     def protocol_teardown(self):
-        if not self.teardown_started:
-            self.teardown_started = True
-            self.factory.unregister(self)
-            for teardown_func in self.factory.protocol_teardown:
-                teardown_func(self)
+        try:
+            if not self.teardown_started:
+                self.teardown_started = True
+                self.factory.unregister(self)
+                for teardown_func in self.factory.protocol_teardown:
+                    teardown_func(self)
+        except AttributeError as e:
+            cprint('There was an AttributeError in DjangoWSServerProtocol.protocol_teardown: {}'.format(e), 'red')
 
     def onMessage(self, msg, binary):
         """
@@ -257,9 +267,10 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         d = deferToThread(self.save_session)
 
         def cb(s):
-            cprint(s, 'cyan')
-            cprint(s.get_decoded(), 'cyan')
-            s.save()
+            if s is not None and hasattr(s, 'get_decoded'):
+                cprint(s, 'cyan')
+                cprint(s.get_decoded(), 'cyan')
+                s.save()
 
         d.addCallback(cb)
         d.addErrback(generic_deferred_errback, message='Update Session')
