@@ -117,14 +117,12 @@ class DjangoWSServerProtocol(WebSocketServerProtocol):
         WebSocketServerProtocol.connectionLost(self, reason)
         self.protocol_teardown()
 
-
     def protocol_teardown(self):
         if not self.teardown_started:
             self.teardown_started = True
             self.factory.unregister(self)
             for teardown_func in self.factory.protocol_teardown:
                 teardown_func(self)
-
 
     def onMessage(self, msg, binary):
         """
@@ -437,7 +435,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         cls.protocol_teardown.append(func)
 
 
-def run_server(commands, sslcontext = None):
+def run_server(commands, sslcontext=None):
     port = '31415'
     if options is not None and options.debug:
         port = options.port
