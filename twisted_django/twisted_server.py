@@ -53,7 +53,6 @@ from twisted.python import log
 from autobahn.websocket import (WebSocketServerFactory,
                                 listenWS,
                                 WebSocketServerProtocol)
-from termcolor import colored, cprint
 from inspect import isfunction
 
 from twisted_command_utilities import (ClientError,
@@ -66,12 +65,6 @@ DEBUG = True
 logging.basicConfig()
 
 AUTHENTICATION_FAILURE = 3000
-
-
-def printerror(msg):
-    errormsg = '{0}: {1}'.format(who_called_me(), msg)
-    cprint(errormsg, 'red')
-
 
 class DjangoWSServerProtocol(object, WebSocketServerProtocol):
     """
@@ -132,7 +125,7 @@ class DjangoWSServerProtocol(object, WebSocketServerProtocol):
                 for teardown_func in self.factory.protocol_teardown:
                     teardown_func(self)
         except AttributeError as e:
-            cprint('There was an AttributeError in DjangoWSServerProtocol.protocol_teardown: {}'.format(e), 'red')
+            self.logger.error('There was an AttributeError in DjangoWSServerProtocol.protocol_teardown: {}'.format(e))
 
     def onMessage(self, msg, binary):
         """
@@ -175,8 +168,8 @@ class DjangoWSServerProtocol(object, WebSocketServerProtocol):
                 self.current_command = command
                 try:
                     if PRINT_MESSAGES is True:
-                        cprint('processing django command: {0}'.format(json.dumps(msg, indent=4,
-                               sort_keys=True)), 'blue')
+                        self.logger.debug('processing django command: {0}'.format(json.dumps(msg, indent=4,
+                               sort_keys=True)))
                     r = function(val, self, binary=binary)
                     if r is not None and not isinstance(r, Deferred):
                         r.distribute(self.current_command, self)
@@ -229,7 +222,7 @@ class DjangoWSServerProtocol(object, WebSocketServerProtocol):
                 user = User.objects.get(pk=uid)
                 self.logger.debug(user.username)
                 self.session = session.get_decoded()
-                cprint('session: {0}'.format(self.session), 'red')
+                self.logger.debug('session: {0}'.format(self.session))
                 self.user = user
             except Session.DoesNotExist:
                 self.logger.debug('Session does not exist!')
@@ -249,11 +242,9 @@ class DjangoWSServerProtocol(object, WebSocketServerProtocol):
             self.sendMessage(json.dumps(auth_response))
 
     def session_error(self, err):
-        h = colored('Session Confirmation Errback: '
-                    'An error ocurred during session verification\n',
-                    'red')
-        e = colored(err, 'red', attrs=['bold'])
-        print (e + h)
+        h = 'Session Confirmation Errback: An error ocurred during session verification\n'
+        e = err
+        self.logger.error("{}{}".format(e,h))
 
         auth_response = {'authenticate': {'authenticate': 'failure'}}
         self.sendMessage(json.dumps(auth_response))
@@ -268,8 +259,8 @@ class DjangoWSServerProtocol(object, WebSocketServerProtocol):
 
         def cb(s):
             if s is not None and hasattr(s, 'get_decoded'):
-                cprint(s, 'cyan')
-                cprint(s.get_decoded(), 'cyan')
+                self.logger.debug(s)
+                self.logger.debug(s.get_decoded())
                 s.save()
 
         d.addCallback(cb)
@@ -325,10 +316,10 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
         self.load_commands(commands)
-        cprint('Modules: {0}'.format(self.command_modules_init), 'yellow')
-        cprint('Commands: {0}'.format(self.commands), 'yellow')
-        cprint('Initializing Protocol...', 'green')
-        cprint('{0}'.format(settings.TWISTED_STUFF), 'red')
+        self.logger.info('Modules: {0}'.format(self.command_modules_init))
+        self.logger.info('Commands: {0}'.format(self.commands))
+        self.logger.info('Initializing Protocol...')
+        self.logger.info('{0}'.format(settings.TWISTED_STUFF))
 
         WebSocketServerFactory.__init__(self, url, debug=debug, debugCodePaths=debugCodePaths)
 
@@ -352,7 +343,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
         keys = sorted(self.commands.keys())
         for com in keys:
-            cprint("\t{0}: {0}".format(com, self.commands.get(com)), 'yellow')
+            self.logger.debug("\t{0}: {0}".format(com, self.commands.get(com)))
 
     def register_session_id(self, connection, session_id):
         """
@@ -387,7 +378,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     def send_to_subset(self, clients, msg):
         msg = json.dumps(json.loads(msg))
         if DEBUG:
-            cprint('Sending to browser: {0}'.format(msg), 'yellow')
+            self.logger.debug('Sending to browser: {0}'.format(msg))
         for client in clients:
             if client in self.clients:
                 client.sendMessage(msg)
@@ -442,7 +433,6 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
     @classmethod
     def register_teardown_function(cls, func):
-        cprint(func, 'cyan')
         cls.protocol_teardown.append(func)
 
 
@@ -467,12 +457,12 @@ def run_server(commands, sslcontext=None):
                                         debug=debug,
                                         debugCodePaths=debug)
 
-    cprint('Created factory: {0}'.format(factory), 'green')
+    self.logger.info('Created factory: {0}'.format(factory))
 
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
     if 'TWISTED_TESTING' not in os.environ:
-        cprint('Listening...', 'green')
+        self.logger.debug('Listening...')
         if sslcontext is not None:
             listenWS(factory, sslcontext)
             reactor.run()
