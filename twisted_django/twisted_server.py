@@ -315,6 +315,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
     commands = {}
 
     def __init__(self, url, commands={}, debug=False, debugCodePaths=False):
+        self.logger = logging.getLogger(__name__)
         self.load_commands(commands)
         self.logger.info('Modules: {0}'.format(self.command_modules_init))
         self.logger.info('Commands: {0}'.format(self.commands))
