@@ -438,6 +438,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
 
 
 def run_server(commands, sslcontext=None):
+    logger = logging.getLogger(__name__)
     port = '31415'
     if options is not None and options.debug:
         port = options.port
@@ -458,12 +459,12 @@ def run_server(commands, sslcontext=None):
                                         debug=debug,
                                         debugCodePaths=debug)
 
-    self.logger.info('Created factory: {0}'.format(factory))
+    logger.info('Created factory: {0}'.format(factory))
 
     factory.protocol = DjangoWSServerProtocol
     factory.setProtocolOptions(allowHixie76=True)
     if 'TWISTED_TESTING' not in os.environ:
-        self.logger.debug('Listening...')
+        logger.debug('Listening...')
         if sslcontext is not None:
             listenWS(factory, sslcontext)
             reactor.run()
