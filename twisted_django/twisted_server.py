@@ -320,7 +320,7 @@ class DjangoWSServerFactory(WebSocketServerFactory):
         self.logger.info('Modules: {0}'.format(self.command_modules_init))
         self.logger.info('Commands: {0}'.format(self.commands))
         self.logger.info('Initializing Protocol...')
-        self.logger.info('{0}'.format(settings.TWISTED_STUFF))
+        self.logger.info('Twisted Server has started.')
 
         WebSocketServerFactory.__init__(self, url, debug=debug, debugCodePaths=debugCodePaths)
 
